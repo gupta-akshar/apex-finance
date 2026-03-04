@@ -1,17 +1,31 @@
 import express from "express";
 import {
   registerUser,
-  loginUser,
+  login,
   getMe,
+  refreshAccessToken,
+  logout,
 } from "../controllers/auth.controller.js";
+
 import { protect } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import { registerSchema, loginSchema } from "../validators/auth.validator.js";
 
 const router = express.Router();
 
+// Register
 router.post("/register", validate(registerSchema), registerUser);
-router.post("/login", validate(loginSchema), loginUser);
+
+// Login (returns access token + sets refresh cookie)
+router.post("/login", validate(loginSchema), login);
+
+// Refresh access token
+router.post("/refresh", refreshAccessToken);
+
+// Logout (clears refresh cookie)
+router.post("/logout", logout);
+
+// Get current user
 router.get("/me", protect, getMe);
 
 export default router;

@@ -1,4 +1,5 @@
 import Transaction from "../models/Transaction.js";
+import { getTransactionsService } from "../services/transaction.service.js";
 
 // @route   POST /api/transactions
 // @access  Private
@@ -25,36 +26,72 @@ export const createTransaction = async (req, res, next) => {
     next(error);
   }
 };
+
 // @route   GET /api/transactions
 // @access  Private
 export const getTransactions = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, type, startDate, endDate } = req.query;
+    let {
+      page = 1,
+      limit = 10,
+      type,
+      category,
+      startDate,
+      endDate,
+      sortBy = "date",
+      order = "desc",
+    } = req.query;
+
+    // Convert to numbers safely
+    page = Math.max(1, parseInt(page));
+    limit = Math.min(50, Math.max(1, parseInt(limit))); // max limit = 50
 
     const query = { user: req.user._id };
 
+    // Type filter
     if (type) {
       query.type = type;
     }
 
-    if (startDate && endDate) {
-      query.date = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
-      };
+    // Category filter
+    if (category) {
+      query.category = category;
     }
 
+    // Date filter (independent checks)
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) {
+        query.date.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        query.date.$lte = new Date(endDate);
+      }
+    }
+
+    // Whitelist allowed sort fields
+    const allowedSortFields = ["date", "amount", "createdAt"];
+    if (!allowedSortFields.includes(sortBy)) {
+      sortBy = "date";
+    }
+
+    const sortOptions = {
+      [sortBy]: order === "asc" ? 1 : -1,
+    };
+
     const transactions = await Transaction.find(query)
-      .sort({ date: -1 })
+      .sort(sortOptions)
       .skip((page - 1) * limit)
-      .limit(Number(limit));
+      .limit(limit);
 
     const total = await Transaction.countDocuments(query);
 
     res.status(200).json({
+      success: true,
       total,
-      page: Number(page),
-      pages: Math.ceil(total / limit),
+      page,
+      totalPages: Math.ceil(total / limit),
+      count: transactions.length,
       data: transactions,
     });
   } catch (error) {

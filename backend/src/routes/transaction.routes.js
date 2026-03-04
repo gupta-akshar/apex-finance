@@ -14,7 +14,7 @@ const router = express.Router();
 router.use(protect);
 
 router.post("/", validate(transactionSchema), createTransaction);
-router.get("/", getTransactions);
+router.get("/", protect, getTransactions);
 router.put("/:id", validate(transactionSchema), updateTransaction);
 router.delete("/:id", deleteTransaction);
 

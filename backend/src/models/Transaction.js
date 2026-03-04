@@ -18,13 +18,14 @@ const transactionSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
-      min: 0,
+      min: 0.01,
     },
 
     category: {
       type: String,
       required: true,
       trim: true,
+      lowercase: true,
     },
 
     note: {
@@ -36,6 +37,12 @@ const transactionSchema = new mongoose.Schema(
     date: {
       type: Date,
       required: true,
+      validate: {
+        validator: function (value) {
+          return value <= new Date();
+        },
+        message: "Date cannot be in the future",
+      },
     },
 
     paymentMethod: {
@@ -46,5 +53,10 @@ const transactionSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+//  Compound indexes for performance
+transactionSchema.index({ user: 1, date: -1 });
+transactionSchema.index({ user: 1, type: 1 });
+transactionSchema.index({ user: 1, category: 1 });
 
 export default mongoose.model("Transaction", transactionSchema);
