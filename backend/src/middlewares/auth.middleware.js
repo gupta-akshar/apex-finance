@@ -1,3 +1,4 @@
+// auth.middleware.js
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
@@ -16,7 +17,8 @@ export const protect = async (req, res, next) => {
       return res.status(401).json({ message: "Not authorized, no token" });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Use the correct env variable here
+    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
 
     const user = await User.findById(decoded.id).select("-password");
 
@@ -28,6 +30,7 @@ export const protect = async (req, res, next) => {
 
     next();
   } catch (error) {
+    console.error("Protect middleware error:", error.message); // optional log
     return res.status(401).json({ message: "Not authorized, token failed" });
   }
 };

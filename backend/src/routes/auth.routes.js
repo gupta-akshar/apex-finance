@@ -16,13 +16,13 @@ const router = express.Router();
 // Register
 router.post("/register", validate(registerSchema), registerUser);
 
-// Login (returns access token + sets refresh cookie)
+// Login
 router.post("/login", validate(loginSchema), login);
 
-// Refresh access token
+// Refresh token
 router.post("/refresh", refreshAccessToken);
 
-// Logout (clears refresh cookie)
+// Logout
 router.post("/logout", logout);
 
 // Get current user

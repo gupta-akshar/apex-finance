@@ -3,15 +3,39 @@ import {
   getMonthlySummary,
   getCategoryBreakdown,
   getOverview,
+  getMonthlyTrend,
 } from "../controllers/analytics.controller.js";
+
 import { protect } from "../middlewares/auth.middleware.js";
+import { validate } from "../middlewares/validate.middleware.js";
+import {
+  monthlySchema,
+  categoriesSchema,
+  trendSchema,
+} from "../validators/analytics.validator.js";
 
 const router = express.Router();
 
-router.use(protect);
+// Monthly summary
+router.get(
+  "/monthly",
+  protect,
+  validate(monthlySchema, "query"),
+  getMonthlySummary,
+);
 
-router.get("/monthly", getMonthlySummary);
-router.get("/categories", getCategoryBreakdown);
-router.get("/overview", getOverview);
+// Category breakdown
+router.get(
+  "/categories",
+  protect,
+  validate(categoriesSchema, "query"),
+  getCategoryBreakdown,
+);
+
+// Overview
+router.get("/overview", protect, getOverview);
+
+// Monthly trend
+router.get("/trend", protect, validate(trendSchema, "query"), getMonthlyTrend);
 
 export default router;
