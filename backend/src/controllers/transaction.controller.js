@@ -1,5 +1,7 @@
 import Transaction from "../models/Transaction.js";
-import { getTransactionsService } from "../services/transaction.service.js";
+// import { getTransactionsService } from "../services/transaction.service.js";
+
+import Budget from "../models/Budget.js";
 
 // @route   POST /api/transactions
 // @access  Private
@@ -9,6 +11,55 @@ export const createTransaction = async (req, res, next) => {
 
     if (!type || !amount || !category || !date) {
       return res.status(400).json({ message: "Required fields missing" });
+    }
+
+    let budgetWarning = false;
+    let warningMessage = "";
+
+    if (type === "expense") {
+      const d = new Date(date);
+      const month = d.getMonth() + 1;
+      const year = d.getFullYear();
+
+      const budget = await Budget.findOne({
+        user: req.user._id,
+        category,
+        month,
+        year,
+      });
+
+      if (budget) {
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0);
+
+        const result = await Transaction.aggregate([
+          {
+            $match: {
+              user: req.user._id,
+              type: "expense",
+              category,
+              date: {
+                $gte: startDate,
+                $lte: endDate,
+              },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              spent: { $sum: "$amount" },
+            },
+          },
+        ]);
+
+        const spent = result[0]?.spent || 0;
+        const newTotal = spent + amount;
+
+        if (newTotal > budget.limit) {
+          budgetWarning = true;
+          warningMessage = `You exceeded your ${category} budget by ₹${newTotal - budget.limit}`;
+        }
+      }
     }
 
     const transaction = await Transaction.create({
@@ -21,7 +72,11 @@ export const createTransaction = async (req, res, next) => {
       paymentMethod,
     });
 
-    res.status(201).json(transaction);
+    res.status(201).json({
+      transaction,
+      budgetWarning,
+      warningMessage,
+    });
   } catch (error) {
     next(error);
   }

@@ -32,11 +32,12 @@ const transactionSchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: 200,
+      default: "",
     },
 
     date: {
       type: Date,
-      required: true,
+      default: Date.now,
       validate: {
         validator: function (value) {
           return value <= new Date();
@@ -54,7 +55,6 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-//  Compound indexes for performance
 transactionSchema.index({ user: 1, date: -1 });
 transactionSchema.index({ user: 1, type: 1 });
 transactionSchema.index({ user: 1, category: 1 });
