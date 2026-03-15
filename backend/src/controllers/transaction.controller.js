@@ -30,7 +30,7 @@ export const createTransaction = async (req, res, next) => {
 
       if (budget) {
         const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 0);
+        const endDate = new Date(year, month, 1);
 
         const result = await Transaction.aggregate([
           {
@@ -86,74 +86,34 @@ export const createTransaction = async (req, res, next) => {
 // @access  Private
 export const getTransactions = async (req, res, next) => {
   try {
-    let {
-      page = 1,
-      limit = 10,
-      type,
-      category,
-      startDate,
-      endDate,
-      sortBy = "date",
-      order = "desc",
-    } = req.query;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
 
-    // Convert to numbers safely
-    page = Math.max(1, parseInt(page));
-    limit = Math.min(50, Math.max(1, parseInt(limit))); // max limit = 50
+    const skip = (page - 1) * limit;
 
-    const query = { user: req.user._id };
+    const total = await Transaction.countDocuments({
+      user: req.user._id,
+    });
 
-    // Type filter
-    if (type) {
-      query.type = type;
-    }
-
-    // Category filter
-    if (category) {
-      query.category = category;
-    }
-
-    // Date filter (independent checks)
-    if (startDate || endDate) {
-      query.date = {};
-      if (startDate) {
-        query.date.$gte = new Date(startDate);
-      }
-      if (endDate) {
-        query.date.$lte = new Date(endDate);
-      }
-    }
-
-    // Whitelist allowed sort fields
-    const allowedSortFields = ["date", "amount", "createdAt"];
-    if (!allowedSortFields.includes(sortBy)) {
-      sortBy = "date";
-    }
-
-    const sortOptions = {
-      [sortBy]: order === "asc" ? 1 : -1,
-    };
-
-    const transactions = await Transaction.find(query)
-      .sort(sortOptions)
-      .skip((page - 1) * limit)
+    const transactions = await Transaction.find({
+      user: req.user._id,
+    })
+      .sort({ date: -1 })
+      .skip(skip)
       .limit(limit);
 
-    const total = await Transaction.countDocuments(query);
-
     res.status(200).json({
-      success: true,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit),
-      count: transactions.length,
-      data: transactions,
+      transactions,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalTransactions: total,
+      },
     });
   } catch (error) {
     next(error);
   }
 };
-
 // @route   PUT /api/transactions/:id
 // @access  Private
 export const updateTransaction = async (req, res, next) => {

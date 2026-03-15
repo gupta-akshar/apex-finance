@@ -74,7 +74,7 @@ export const getBudgetStatus = async (req, res, next) => {
     const result = budgets.map((budget) => {
       const spent = spentMap[budget.category] || 0;
       const remaining = budget.limit - spent;
-      const percentage = ((spent / budget.limit) * 100).toFixed(2);
+      const percentage = Number(((spent / budget.limit) * 100).toFixed(2));
 
       return {
         category: budget.category,
@@ -83,6 +83,7 @@ export const getBudgetStatus = async (req, res, next) => {
         remaining,
         percentage,
         warning: percentage >= 80,
+        exceeded: spent > budget.limit,
       };
     });
 

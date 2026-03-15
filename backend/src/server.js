@@ -1,6 +1,7 @@
 import app from "./app.js";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import { startRecurringJob } from "./jobs/recurring.job.js";
 
 dotenv.config();
 
@@ -10,6 +11,9 @@ const startServer = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB connected");
+
+    // start recurring scheduler
+    startRecurringJob();
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
