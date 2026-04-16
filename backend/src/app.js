@@ -15,16 +15,12 @@ import { notFound, errorHandler } from "./middlewares/error.middleware.js";
 
 const app = express();
 
+app.set("etag", false);
+
 app.set("trust proxy", 1);
 
 // Security
 app.use(helmet());
-
-// Rate limit only auth
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-});
 
 app.use(
   cors({
@@ -37,8 +33,13 @@ app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+app.use((req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
+
 // Routes
-app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/auth", authRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/analytics", analyticsRoutes);

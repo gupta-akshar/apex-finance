@@ -37,12 +37,14 @@ export const registerUser = async (req, res, next) => {
     user.refreshToken = refreshToken;
     await user.save();
 
+    const isProd = process.env.NODE_ENV === "production";
+
     res
       .cookie("refreshToken", refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       })
       .status(201)
       .json({
@@ -75,11 +77,14 @@ export const login = async (req, res, next) => {
     user.refreshToken = refreshToken;
     await user.save();
 
+    const isProd = process.env.NODE_ENV === "production";
+    console.log(isProd);
+
     res
       .cookie("refreshToken", refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       })
       .status(200)
@@ -117,9 +122,10 @@ export const refreshAccessToken = async (req, res, next) => {
       accessToken: newAccessToken,
     });
   } catch (error) {
-    return res
-      .status(403)
-      .json({ message: "Invalid or expired refresh token" });
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Refresh token expired" });
+    }
+    return res.status(403).json({ message: "Invalid refresh token" });
   }
 };
 
@@ -149,5 +155,6 @@ export const logout = async (req, res, next) => {
 // ================= GET ME =================
 // @route   GET /api/auth/me
 export const getMe = async (req, res) => {
+  res.set("Cache-Control", "no-store");
   res.status(200).json(req.user);
 };

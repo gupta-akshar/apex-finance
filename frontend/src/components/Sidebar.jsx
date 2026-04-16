@@ -1,38 +1,63 @@
-import { Link, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 
-function Sidebar() {
-  const location = useLocation();
+const Sidebar = () => {
+  const linkClass =
+    "block px-4 py-2 rounded-lg text-secondaryText hover:bg-card hover:text-primaryText transition";
 
-  const linkStyle = (path) =>
-    `block px-4 py-2 rounded-lg ${
-      location.pathname === path
-        ? "bg-blue-600 text-white"
-        : "text-gray-700 hover:bg-gray-200"
-    }`;
+  const activeClass = "bg-card text-primaryText";
 
   return (
-    <div className="w-64 bg-white shadow-md p-4">
-      <h1 className="text-xl font-bold mb-6">FinanceTracker</h1>
+    <div className="w-64 h-screen bg-card border-r border-border p-6">
+      <h1 className="text-xl font-bold mb-8">Expense Tracker</h1>
 
       <nav className="space-y-2">
-        <Link to="/" className={linkStyle("/")}>
+        <NavLink
+          to="/dashboard"
+          className={({ isActive }) =>
+            `${linkClass} ${isActive ? activeClass : ""}`
+          }
+        >
           Dashboard
-        </Link>
-        <Link to="/add" className={linkStyle("/add")}>
-          Add Transaction
-        </Link>
-        <Link to="/transactions" className={linkStyle("/transactions")}>
+        </NavLink>
+
+        <NavLink
+          to="/transactions"
+          className={({ isActive }) =>
+            `${linkClass} ${isActive ? activeClass : ""}`
+          }
+        >
           Transactions
-        </Link>
-        <Link to="/categories" className={linkStyle("/categories")}>
+        </NavLink>
+
+        <NavLink
+          to="/add-transaction"
+          className={({ isActive }) =>
+            `${linkClass} ${isActive ? activeClass : ""}`
+          }
+        >
+          Add Transaction
+        </NavLink>
+
+        <NavLink
+          to="/categories"
+          className={({ isActive }) =>
+            `${linkClass} ${isActive ? activeClass : ""}`
+          }
+        >
           Categories
-        </Link>
-        <Link to="/reports" className={linkStyle("/reports")}>
+        </NavLink>
+
+        <NavLink
+          to="/reports"
+          className={({ isActive }) =>
+            `${linkClass} ${isActive ? activeClass : ""}`
+          }
+        >
           Reports
-        </Link>
+        </NavLink>
       </nav>
     </div>
   );
-}
+};
 
 export default Sidebar;
