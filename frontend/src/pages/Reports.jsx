@@ -12,7 +12,7 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { useTransactions } from "../context/TransactionContext";
+import { useTransactions } from "../hooks/useTransaction";
 
 const Reports = () => {
   const { transactions } = useTransactions();

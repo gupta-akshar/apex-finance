@@ -98,6 +98,7 @@ export const getTransactions = async (req, res, next) => {
     const transactions = await Transaction.find({
       user: req.user._id,
     })
+      .populate("category", "name type")
       .sort({ date: -1 })
       .skip(skip)
       .limit(limit);

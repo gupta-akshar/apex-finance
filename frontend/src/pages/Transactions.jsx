@@ -1,5 +1,5 @@
 import React from "react";
-import { useTransactions } from "../context/TransactionContext";
+import { useTransactions } from "../hooks/useTransaction.js";
 
 const Transactions = () => {
   const { transactions, loading, removeTransaction } = useTransactions();

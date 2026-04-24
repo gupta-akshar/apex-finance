@@ -22,10 +22,9 @@ const transactionSchema = new mongoose.Schema(
     },
 
     category: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
       required: true,
-      trim: true,
-      lowercase: true,
     },
 
     note: {

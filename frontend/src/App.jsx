@@ -17,7 +17,7 @@ import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
 import Categories from "./pages/Categories";
 import Reports from "./pages/Reports";
-import AddTransaction from "./pages/AddTransaction";
+import Recurring from "./pages/Recurring";
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -27,6 +27,14 @@ const ProtectedRoute = ({ children }) => {
   return user ? children : <Navigate to="/login" />;
 };
 
+const PublicRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) return <div>Loading...</div>;
+
+  return user ? <Navigate to="/dashboard" /> : children;
+};
+
 function App() {
   return (
     <AuthProvider>
@@ -34,10 +42,26 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
 
-          {/* Protected Routes with Layout */}
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            }
+          />
+
+          <Route
+            path="/register"
+            element={
+              <PublicRoute>
+                <Register />
+              </PublicRoute>
+            }
+          />
+
+          {/* Protected Routes */}
           <Route
             element={
               <ProtectedRoute>
@@ -46,10 +70,10 @@ function App() {
             }
           >
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/add-transaction" element={<AddTransaction />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/recurring" element={<Recurring />} />
           </Route>
         </Routes>
       </Router>

@@ -1,63 +1,98 @@
-import React from "react";
-import { useTransactions } from "../context/TransactionContext";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTransactions } from "../hooks/useTransaction";
+import TransactionModal from "../components/TransactionModal";
 
 const Dashboard = () => {
+  const navigate = useNavigate(); // ✅ FIXED
   const { transactions, loading } = useTransactions();
-  const navigate = useNavigate();
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [mode, setMode] = useState(null);
+
+  const openModal = (type) => {
+    setMode(type);
+    setIsOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsOpen(false);
+    setMode(null);
+  };
 
   if (loading) return <p className="p-6 text-secondaryText">Loading...</p>;
 
-  // Summary calculations
+  // Summary
   const totalIncome = transactions
     .filter((t) => t.type === "income")
     .reduce((sum, t) => sum + t.amount, 0);
+
   const totalExpense = transactions
     .filter((t) => t.type === "expense")
     .reduce((sum, t) => sum + t.amount, 0);
+
   const balance = totalIncome - totalExpense;
 
-  // Recent transactions (latest 3)
   const recentTx = [...transactions].reverse().slice(0, 3);
 
   return (
     <div className="min-h-screen bg-background text-primaryText p-6">
       <h1 className="text-3xl font-bold mb-8">Dashboard</h1>
 
-      {/* Summary Cards */}
-      <div className="grid md:grid-cols-3 gap-6 mb-10">
-        {[
-          { title: "Total Balance", amount: balance, color: "text-white" },
-          {
-            title: "Total Income",
-            amount: totalIncome,
-            color: "text-green-400",
-          },
-          {
-            title: "Total Expenses",
-            amount: totalExpense,
-            color: "text-red-400",
-          },
-        ].map((stat, i) => (
-          <div
-            key={i}
-            className="bg-card border border-border rounded-xl p-6 hover:scale-105 transition-transform duration-300 cursor-pointer"
-          >
-            <p className="text-secondaryText text-sm mb-2">{stat.title}</p>
-            <h2 className={`text-2xl font-semibold ${stat.color}`}>
-              ₹{stat.amount}
-            </h2>
-          </div>
-        ))}
+      {/* ACTION BUTTONS */}
+      <div className="flex gap-3 justify-end mb-6">
+        <button
+          onClick={() => openModal("income")}
+          className="bg-green-500 px-4 py-2 rounded-lg text-white"
+        >
+          New Income
+        </button>
+
+        <button
+          onClick={() => openModal("expense")}
+          className="bg-red-500 px-4 py-2 rounded-lg text-white"
+        >
+          New Expense
+        </button>
+
+        <button
+          onClick={() => navigate("/recurring")} // ✅ FIXED
+          className="bg-blue-500 px-4 py-2 rounded-lg text-white"
+        >
+          New Recurring
+        </button>
       </div>
 
-      {/* Recent Transactions */}
-      <div className="bg-card border border-border rounded-xl p-6 hover:shadow-lg transition-shadow">
+      {/* SUMMARY */}
+      <div className="grid md:grid-cols-3 gap-6 mb-10">
+        <div className="bg-card border border-border rounded-xl p-6">
+          <p className="text-secondaryText text-sm">Total Balance</p>
+          <h2 className="text-2xl font-semibold text-white">₹{balance}</h2>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-6">
+          <p className="text-secondaryText text-sm">Total Income</p>
+          <h2 className="text-2xl font-semibold text-green-400">
+            ₹{totalIncome}
+          </h2>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-6">
+          <p className="text-secondaryText text-sm">Total Expenses</p>
+          <h2 className="text-2xl font-semibold text-red-400">
+            ₹{totalExpense}
+          </h2>
+        </div>
+      </div>
+
+      {/* RECENT TRANSACTIONS */}
+      <div className="bg-card border border-border rounded-xl p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold">Recent Transactions</h2>
+
           <button
-            onClick={() => navigate("/add-transaction")}
-            className="bg-accent hover:bg-accentHover text-white px-4 py-2 rounded-lg transition transform hover:scale-105"
+            onClick={() => openModal("expense")}
+            className="bg-accent px-4 py-2 rounded-lg text-white"
           >
             Add Transaction
           </button>
@@ -70,16 +105,21 @@ const Dashboard = () => {
             {recentTx.map((tx) => (
               <div
                 key={tx._id}
-                className={`flex justify-between items-center p-4 rounded-lg border border-border bg-inputBg hover:bg-[#1f1f23] transition-colors duration-300 cursor-pointer`}
+                className="flex justify-between items-center p-4 rounded-lg border border-border bg-inputBg"
               >
                 <div>
-                  <p className="font-medium">{tx.category}</p>
+                  <p className="font-medium">
+                    {tx.category?.name || "Unknown Category"} {/* ✅ FIXED */}
+                  </p>
                   <p className="text-sm text-secondaryText">
                     {new Date(tx.date).toLocaleDateString()}
                   </p>
                 </div>
+
                 <p
-                  className={`font-semibold ${tx.type === "expense" ? "text-red-400" : "text-green-400"}`}
+                  className={`font-semibold ${
+                    tx.type === "expense" ? "text-red-400" : "text-green-400"
+                  }`}
                 >
                   {tx.type === "expense" ? "-" : "+"}₹{tx.amount}
                 </p>
@@ -88,6 +128,9 @@ const Dashboard = () => {
           </div>
         )}
       </div>
+
+      {/* MODAL */}
+      {isOpen && <TransactionModal mode={mode} onClose={closeModal} />}
     </div>
   );
 };

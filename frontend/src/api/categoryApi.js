@@ -1,5 +1,4 @@
-// src/api/categoryApi.js
-import API from "./axios"; // your axios instance
+import API from "./axios";
 
 // Fetch all categories
 export const getCategories = async () => {
@@ -8,12 +7,12 @@ export const getCategories = async () => {
 };
 
 // Add a new category
-export const addCategoryAPI = async (name) => {
-  const res = await API.post("/categories", { name });
+export const addCategoryAPI = async ({ name, type }) => {
+  const res = await API.post("/categories", { name, type });
   return res.data;
 };
 
-// Delete a category by ID
+// Delete category
 export const deleteCategoryAPI = async (id) => {
   const res = await API.delete(`/categories/${id}`);
   return res.data;

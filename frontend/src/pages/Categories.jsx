@@ -8,6 +8,7 @@ import {
 const Categories = () => {
   const [categories, setCategories] = useState([]);
   const [newCategory, setNewCategory] = useState("");
+  const [type, setType] = useState("expense");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,8 +27,9 @@ const Categories = () => {
 
   const addCategory = async () => {
     if (!newCategory) return;
+
     try {
-      const added = await addCategoryAPI(newCategory);
+      const added = await addCategoryAPI({ name: newCategory, type });
       setCategories([...categories, added]);
       setNewCategory("");
     } catch (err) {

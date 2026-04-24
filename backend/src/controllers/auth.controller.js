@@ -5,10 +5,21 @@ import {
   generateAccessToken,
   generateRefreshToken,
 } from "../utils/generateToken.js";
+import Category from "../models/Category.js";
 
 // ================= REGISTER =================
 // @route   POST /api/auth/register
 export const registerUser = async (req, res, next) => {
+  const defaultCategories = [
+    { name: "Salary", type: "income" },
+    { name: "Freelance", type: "income" },
+    { name: "Food", type: "expense" },
+    { name: "Transport", type: "expense" },
+    { name: "Shopping", type: "expense" },
+    { name: "Bills", type: "expense" },
+    { name: "Health", type: "expense" },
+  ];
+
   try {
     const { name, email, password } = req.body;
 
@@ -29,6 +40,13 @@ export const registerUser = async (req, res, next) => {
       email,
       password: hashedPassword,
     });
+
+    await Category.insertMany(
+      defaultCategories.map((cat) => ({
+        ...cat,
+        user: user._id,
+      })),
+    );
 
     const accessToken = generateAccessToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
@@ -111,11 +129,18 @@ export const refreshAccessToken = async (req, res, next) => {
 
     const user = await User.findById(decoded.id);
 
-    if (!user || user.refreshToken !== refreshToken) {
+    if (!user) {
+      return res.status(403).json({ message: "User not found" });
+    }
+
+    if (user.refreshToken !== refreshToken) {
       return res.status(403).json({ message: "Invalid refresh token" });
     }
 
     const newAccessToken = generateAccessToken(user._id);
+
+    // 🔥 Prevent caching
+    res.set("Cache-Control", "no-store");
 
     res.status(200).json({
       success: true,

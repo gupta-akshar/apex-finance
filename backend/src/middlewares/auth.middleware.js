@@ -30,7 +30,16 @@ export const protect = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error("Protect middleware error:", error.message); // optional log
-    return res.status(401).json({ message: "Not authorized, token failed" });
+    console.error("Protect middleware error:", error.message);
+
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Token expired" });
+    }
+
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    return res.status(401).json({ message: "Not authorized" });
   }
 };
