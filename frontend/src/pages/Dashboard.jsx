@@ -4,7 +4,7 @@ import { useTransactions } from "../hooks/useTransaction";
 import TransactionModal from "../components/TransactionModal";
 
 const Dashboard = () => {
-  const navigate = useNavigate(); // ✅ FIXED
+  const navigate = useNavigate();
   const { transactions, loading } = useTransactions();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -56,7 +56,7 @@ const Dashboard = () => {
         </button>
 
         <button
-          onClick={() => navigate("/recurring")} // ✅ FIXED
+          onClick={() => navigate("/recurring")}
           className="bg-blue-500 px-4 py-2 rounded-lg text-white"
         >
           New Recurring
@@ -109,7 +109,7 @@ const Dashboard = () => {
               >
                 <div>
                   <p className="font-medium">
-                    {tx.category?.name || "Unknown Category"} {/* ✅ FIXED */}
+                    {tx.category?.name || "Unknown"}
                   </p>
                   <p className="text-sm text-secondaryText">
                     {new Date(tx.date).toLocaleDateString()}
