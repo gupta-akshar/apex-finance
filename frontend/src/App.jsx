@@ -1,11 +1,6 @@
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
-import { AuthProvider } from "./context/AuthProvider";
+import { TransactionProvider } from "./context/TransactionProvider.jsx";
 import { useAuth } from "./hooks/useAuth";
 
 import Layout from "./layout/Layout";
@@ -19,65 +14,87 @@ import Categories from "./pages/Categories";
 import Reports from "./pages/Reports";
 import Recurring from "./pages/Recurring";
 
+const LoadingScreen = () => {
+  return (
+    <div className="h-screen flex items-center justify-center text-lg font-medium">
+      Loading...
+    </div>
+  );
+};
+
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
-  if (loading) return <div>Loading...</div>;
+  // Wait until auth check finishes
+  if (loading) {
+    return <LoadingScreen />;
+  }
 
-  return user ? children : <Navigate to="/login" />;
+  // Redirect if not authenticated
+  return user ? children : <Navigate to="/login" replace />;
 };
 
 const PublicRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
-  if (loading) return <div>Loading...</div>;
+  // Wait until auth check finishes
+  if (loading) {
+    return <LoadingScreen />;
+  }
 
-  return user ? <Navigate to="/dashboard" /> : children;
+  // Redirect authenticated users away from auth pages
+  return user ? <Navigate to="/dashboard" replace /> : children;
 };
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<LandingPage />} />
+    <Routes>
+      {/* Landing */}
+      <Route path="/" element={<LandingPage />} />
 
-          <Route
-            path="/login"
-            element={
-              <PublicRoute>
-                <Login />
-              </PublicRoute>
-            }
-          />
+      {/* Public Routes */}
+      <Route
+        path="/login"
+        element={
+          <PublicRoute>
+            <Login />
+          </PublicRoute>
+        }
+      />
 
-          <Route
-            path="/register"
-            element={
-              <PublicRoute>
-                <Register />
-              </PublicRoute>
-            }
-          />
+      <Route
+        path="/register"
+        element={
+          <PublicRoute>
+            <Register />
+          </PublicRoute>
+        }
+      />
 
-          {/* Protected Routes */}
-          <Route
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/transactions" element={<Transactions />} />
-            <Route path="/categories" element={<Categories />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/recurring" element={<Recurring />} />
-          </Route>
-        </Routes>
-      </Router>
-    </AuthProvider>
+      {/* Protected Routes */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <TransactionProvider>
+              <Layout />
+            </TransactionProvider>
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/dashboard" element={<Dashboard />} />
+
+        <Route path="/transactions" element={<Transactions />} />
+
+        <Route path="/categories" element={<Categories />} />
+
+        <Route path="/reports" element={<Reports />} />
+
+        <Route path="/recurring" element={<Recurring />} />
+      </Route>
+
+      {/* Catch-all */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 

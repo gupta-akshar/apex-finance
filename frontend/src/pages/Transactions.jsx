@@ -1,19 +1,17 @@
 import React from "react";
-import { useTransactions } from "../hooks/useTransaction";
+import { useTransactions } from "../hooks/useTransaction.js";
 import TransactionTable from "../components/TransactionTable";
 
 const Transactions = () => {
   const { transactions, loading, removeTransaction } = useTransactions();
 
-  if (loading) return <p className="p-6">Loading...</p>;
-
+  if (loading) return <p className="p-6 text-secondaryText">Loading...</p>;
   if (transactions.length === 0)
-    return <p className="p-6">No transactions yet.</p>;
+    return <p className="p-6 text-secondaryText">No transactions yet.</p>;
 
   return (
-    <div className="p-6">
-      <h1 className="text-3xl mb-6">Transactions</h1>
-
+    <div className="min-h-screen bg-background text-primaryText p-6">
+      <h1 className="text-3xl font-bold mb-8">Transactions</h1>
       <TransactionTable
         transactions={transactions}
         onDelete={removeTransaction}

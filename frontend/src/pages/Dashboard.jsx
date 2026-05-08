@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTransactions } from "../hooks/useTransaction";
 import TransactionModal from "../components/TransactionModal";
+import TransactionTable from "../components/TransactionTable";
+import SummaryCard from "../components/SummaryCard";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -65,24 +67,17 @@ const Dashboard = () => {
 
       {/* SUMMARY */}
       <div className="grid md:grid-cols-3 gap-6 mb-10">
-        <div className="bg-card border border-border rounded-xl p-6">
-          <p className="text-secondaryText text-sm">Total Balance</p>
-          <h2 className="text-2xl font-semibold text-white">₹{balance}</h2>
-        </div>
-
-        <div className="bg-card border border-border rounded-xl p-6">
-          <p className="text-secondaryText text-sm">Total Income</p>
-          <h2 className="text-2xl font-semibold text-green-400">
-            ₹{totalIncome}
-          </h2>
-        </div>
-
-        <div className="bg-card border border-border rounded-xl p-6">
-          <p className="text-secondaryText text-sm">Total Expenses</p>
-          <h2 className="text-2xl font-semibold text-red-400">
-            ₹{totalExpense}
-          </h2>
-        </div>
+        <SummaryCard title="Total Balance" value={balance} color="text-white" />
+        <SummaryCard
+          title="Total Income"
+          value={totalIncome}
+          color="text-green-400"
+        />
+        <SummaryCard
+          title="Total Expenses"
+          value={totalExpense}
+          color="text-red-400"
+        />
       </div>
 
       {/* RECENT TRANSACTIONS */}
@@ -101,31 +96,7 @@ const Dashboard = () => {
         {recentTx.length === 0 ? (
           <p className="text-secondaryText">No recent transactions</p>
         ) : (
-          <div className="space-y-4">
-            {recentTx.map((tx) => (
-              <div
-                key={tx._id}
-                className="flex justify-between items-center p-4 rounded-lg border border-border bg-inputBg"
-              >
-                <div>
-                  <p className="font-medium">
-                    {tx.category?.name || "Unknown"}
-                  </p>
-                  <p className="text-sm text-secondaryText">
-                    {new Date(tx.date).toLocaleDateString()}
-                  </p>
-                </div>
-
-                <p
-                  className={`font-semibold ${
-                    tx.type === "expense" ? "text-red-400" : "text-green-400"
-                  }`}
-                >
-                  {tx.type === "expense" ? "-" : "+"}₹{tx.amount}
-                </p>
-              </div>
-            ))}
-          </div>
+          <TransactionTable transactions={recentTx} />
         )}
       </div>
 

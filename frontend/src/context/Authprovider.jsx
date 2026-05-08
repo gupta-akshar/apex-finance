@@ -1,54 +1,94 @@
-import { useState, useEffect } from "react";
-import axios from "../api/axios";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import API from "../api/axios";
 import { AuthContext } from "./AuthContext";
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-  const fetchUser = async () => {
+  // ─── Fetch current user ──────────────────────────────────────────────────
+  // Keep this simple — just fetch /auth/me.
+  // The axios interceptor handles 401s and token refresh automatically.
+  // DO NOT manually retry refresh here — that conflicts with the interceptor.
+  const fetchUser = useCallback(async () => {
     try {
-      const res = await axios.get("/auth/me");
-      setUser(res.data);
+      const res = await API.get("/auth/me");
+      setUser(res.data.user || res.data);
     } catch {
-      try {
-        const refreshRes = await axios.post("/auth/refresh");
-        const newAccessToken = refreshRes.data.accessToken;
-
-        localStorage.setItem("accessToken", newAccessToken);
-
-        const res = await axios.get("/auth/me");
-        setUser(res.data);
-      } catch {
-        setUser(null);
-      }
+      // Interceptor already attempted a refresh and it failed.
+      // Just clear the user — the auth:logout event will redirect.
+      setUser(null);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchUser();
   }, []);
 
+  // ─── Listen for forced logout from axios interceptor ────────────────────
+  // When refresh token is expired/invalid, axios fires this event
+  // instead of doing window.location.href (which would cause a reload)
+  useEffect(() => {
+    const handleForcedLogout = () => {
+      setUser(null);
+      navigate("/login");
+    };
+
+    window.addEventListener("auth:logout", handleForcedLogout);
+    return () => window.removeEventListener("auth:logout", handleForcedLogout);
+  }, [navigate]);
+
+  // ─── Initial session check ───────────────────────────────────────────────
+  useEffect(() => {
+    fetchUser();
+  }, [fetchUser]);
+
+  // ─── Login ───────────────────────────────────────────────────────────────
   const login = async (email, password) => {
-    const res = await axios.post("/auth/login", { email, password });
-    localStorage.setItem("accessToken", res.data.accessToken);
-    await fetchUser();
+    const res = await API.post("/auth/login", { email, password });
+    const { accessToken, user: userData } = res.data;
+
+    localStorage.setItem("accessToken", accessToken);
+
+    // Update axios default so next request uses the new token immediately
+    API.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+
+    // Use user data from login response directly — no need for a second
+    // round-trip to /auth/me
+    setUser(userData);
+
     return res.data;
   };
 
+  // ─── Register ────────────────────────────────────────────────────────────
   const register = async (name, email, password) => {
-    const res = await axios.post("/auth/register", { name, email, password });
-    localStorage.setItem("accessToken", res.data.accessToken);
-    await fetchUser();
+    const res = await API.post("/auth/register", { name, email, password });
+    const { accessToken, user: userData } = res.data;
+
+    localStorage.setItem("accessToken", accessToken);
+    API.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+
+    setUser(userData);
+
     return res.data;
   };
 
+  // ─── Logout ──────────────────────────────────────────────────────────────
   const logout = async () => {
-    await axios.post("/auth/logout");
-    localStorage.removeItem("accessToken");
-    setUser(null);
+    try {
+      // Tell the server to invalidate the refresh token cookie
+      await API.post("/auth/logout");
+    } catch (err) {
+      // Log but don't block local logout — we still clear everything.
+      // If this fails, the refresh token stays alive on the server until
+      // it naturally expires, but the user is logged out locally.
+      console.error("Logout API error:", err);
+    } finally {
+      localStorage.removeItem("accessToken");
+      delete API.defaults.headers.common["Authorization"];
+      setUser(null);
+      navigate("/login");
+    }
   };
 
   return (
