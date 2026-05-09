@@ -30,15 +30,6 @@ const Sidebar = () => {
         </NavLink>
 
         <NavLink
-          to="/add-transaction"
-          className={({ isActive }) =>
-            `${linkClass} ${isActive ? activeClass : ""}`
-          }
-        >
-          Add Transaction
-        </NavLink>
-
-        <NavLink
           to="/categories"
           className={({ isActive }) =>
             `${linkClass} ${isActive ? activeClass : ""}`

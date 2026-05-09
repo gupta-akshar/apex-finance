@@ -54,8 +54,23 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// ─── Indexes ─────────────────────────────────────────────────────────────────
+// Primary query: user + date (most common — list & sort by date)
 transactionSchema.index({ user: 1, date: -1 });
-transactionSchema.index({ user: 1, type: 1 });
-transactionSchema.index({ user: 1, category: 1 });
+
+// Filter by type within a user
+transactionSchema.index({ user: 1, type: 1, date: -1 });
+
+// Filter by category within a user
+transactionSchema.index({ user: 1, category: 1, date: -1 });
+
+// Combined type + category filter
+transactionSchema.index({ user: 1, type: 1, category: 1, date: -1 });
+
+// Amount-based sorting
+transactionSchema.index({ user: 1, amount: -1 });
+
+// createdAt-based ordering (fallback / admin)
+transactionSchema.index({ user: 1, createdAt: -1 });
 
 export default mongoose.model("Transaction", transactionSchema);
