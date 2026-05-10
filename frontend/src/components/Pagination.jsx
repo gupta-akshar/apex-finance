@@ -1,8 +1,27 @@
 import React from "react";
 import { useTransactions } from "../hooks/useTransaction";
 
-const btnBase =
-  "px-4 py-2 rounded-lg text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-accent";
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+const PageBtn = ({ children, onClick, disabled, active }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={[
+      "min-w-[32px] h-8 px-2 rounded-md text-sm font-medium",
+      "transition-colors duration-100 focus:outline-none focus:ring-2 focus:ring-accent/50",
+      active
+        ? "bg-accent text-white cursor-default shadow-sm shadow-accent/30"
+        : disabled
+          ? "text-secondaryText/30 cursor-not-allowed"
+          : "text-secondaryText hover:text-primaryText hover:bg-[#1f1f23]",
+    ].join(" ")}
+  >
+    {children}
+  </button>
+);
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 const Pagination = () => {
   const { pagination, setPage, loading } = useTransactions();
@@ -13,72 +32,75 @@ const Pagination = () => {
   const from = (page - 1) * limit + 1;
   const to = Math.min(page * limit, total);
 
-  // Build a compact page-number list: always show first, last, current ± 1
-  const pageNumbers = [];
-  const delta = 1;
-  const rangeStart = Math.max(2, page - delta);
-  const rangeEnd = Math.min(pages - 1, page + delta);
+  // Compact page list: always show first, last, current ±1, with ellipsis
+  const buildPages = () => {
+    const items = [];
+    const delta = 1;
+    const rangeL = Math.max(2, page - delta);
+    const rangeR = Math.min(pages - 1, page + delta);
 
-  pageNumbers.push(1);
-  if (rangeStart > 2) pageNumbers.push("…");
-  for (let i = rangeStart; i <= rangeEnd; i++) pageNumbers.push(i);
-  if (rangeEnd < pages - 1) pageNumbers.push("…");
-  if (pages > 1) pageNumbers.push(pages);
+    items.push(1);
+    if (rangeL > 2) items.push("…L");
+    for (let i = rangeL; i <= rangeR; i++) items.push(i);
+    if (rangeR < pages - 1) items.push("…R");
+    if (pages > 1) items.push(pages);
+
+    return items;
+  };
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6">
-      {/* Info */}
-      <p className="text-sm text-secondaryText">
-        Showing <span className="text-primaryText font-medium">{from}</span>–
-        <span className="text-primaryText font-medium">{to}</span> of{" "}
-        <span className="text-primaryText font-medium">{total}</span>{" "}
+    <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+      {/* Result count */}
+      <p className="text-xs text-secondaryText tabular-nums">
+        <span className="text-primaryText font-medium">
+          {from}–{to}
+        </span>{" "}
+        of <span className="text-primaryText font-medium">{total}</span>{" "}
         transaction{total !== 1 ? "s" : ""}
       </p>
 
-      {/* Controls */}
+      {/* Buttons */}
       <div className="flex items-center gap-1">
-        {/* Previous */}
-        <button
+        {/* Prev */}
+        <PageBtn
           onClick={() => setPage(page - 1)}
           disabled={page === 1 || loading}
-          className={`${btnBase} border border-border hover:bg-[#1f1f23] text-primaryText disabled:opacity-40 disabled:cursor-not-allowed`}
         >
           ← Prev
-        </button>
+        </PageBtn>
+
+        <div className="w-px h-4 bg-border mx-0.5" />
 
         {/* Page numbers */}
-        {pageNumbers.map((p, idx) =>
-          p === "…" ? (
+        {buildPages().map((p, i) =>
+          typeof p === "string" ? (
             <span
-              key={`ellipsis-${idx}`}
-              className="px-2 text-secondaryText select-none"
+              key={p}
+              className="px-1 text-secondaryText/40 text-sm select-none"
             >
-              …
+              ···
             </span>
           ) : (
-            <button
+            <PageBtn
               key={p}
-              onClick={() => setPage(p)}
+              active={p === page}
               disabled={p === page || loading}
-              className={`${btnBase} ${
-                p === page
-                  ? "bg-accent text-white cursor-default"
-                  : "border border-border hover:bg-[#1f1f23] text-primaryText disabled:opacity-40"
-              }`}
+              onClick={() => setPage(p)}
             >
               {p}
-            </button>
+            </PageBtn>
           ),
         )}
 
+        <div className="w-px h-4 bg-border mx-0.5" />
+
         {/* Next */}
-        <button
+        <PageBtn
           onClick={() => setPage(page + 1)}
           disabled={page === pages || loading}
-          className={`${btnBase} border border-border hover:bg-[#1f1f23] text-primaryText disabled:opacity-40 disabled:cursor-not-allowed`}
         >
           Next →
-        </button>
+        </PageBtn>
       </div>
     </div>
   );

@@ -1,53 +1,52 @@
 import { NavLink } from "react-router-dom";
 
 const Sidebar = () => {
-  const linkClass =
-    "block px-4 py-2 rounded-lg text-secondaryText hover:bg-card hover:text-primaryText transition";
+  const linkBase =
+    "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-secondaryText hover:bg-[#1f1f23] hover:text-primaryText transition-colors duration-150";
 
-  const activeClass = "bg-card text-primaryText";
+  const activeClass = "bg-[#1f1f23] text-primaryText font-medium";
+
+  const navItem = (to, label, icon) => (
+    <NavLink
+      to={to}
+      className={({ isActive }) => `${linkBase} ${isActive ? activeClass : ""}`}
+    >
+      <span className="text-base leading-none">{icon}</span>
+      {label}
+    </NavLink>
+  );
 
   return (
-    <div className="w-64 h-screen bg-card border-r border-border p-6">
-      <h1 className="text-xl font-bold mb-8">Expense Tracker</h1>
+    <aside
+      className={[
+        "fixed left-0 top-0 z-20",
+        "h-screen w-64",
+        "bg-card border-r border-border",
+        "flex flex-col",
+        "overflow-y-auto",
+      ].join(" ")}
+    >
+      {/* Brand */}
+      <div className="px-5 py-5 border-b border-border shrink-0">
+        <span className="text-base font-bold tracking-tight text-primaryText">
+          💸 ExpenseTracker
+        </span>
+      </div>
 
-      <nav className="space-y-2">
-        <NavLink
-          to="/dashboard"
-          className={({ isActive }) =>
-            `${linkClass} ${isActive ? activeClass : ""}`
-          }
-        >
-          Dashboard
-        </NavLink>
-
-        <NavLink
-          to="/transactions"
-          className={({ isActive }) =>
-            `${linkClass} ${isActive ? activeClass : ""}`
-          }
-        >
-          Transactions
-        </NavLink>
-
-        <NavLink
-          to="/categories"
-          className={({ isActive }) =>
-            `${linkClass} ${isActive ? activeClass : ""}`
-          }
-        >
-          Categories
-        </NavLink>
-
-        <NavLink
-          to="/reports"
-          className={({ isActive }) =>
-            `${linkClass} ${isActive ? activeClass : ""}`
-          }
-        >
-          Reports
-        </NavLink>
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-4 space-y-0.5">
+        {navItem("/dashboard", "Dashboard", "▦")}
+        {navItem("/transactions", "Transactions", "↕")}
+        {navItem("/categories", "Categories", "◈")}
+        {navItem("/reports", "Reports", "◉")}
+        {navItem("/recurring", "Recurring", "↺")}
       </nav>
-    </div>
+
+      {/* Footer hint */}
+      <div className="px-5 py-4 border-t border-border shrink-0">
+        <p className="text-xs text-secondaryText/60">v1.0.0</p>
+      </div>
+    </aside>
   );
 };
 
