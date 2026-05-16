@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -14,7 +14,7 @@ import {
   Area,
   AreaChart,
 } from "recharts";
-import { useTransactions } from "../hooks/useTransaction";
+import useAnalytics from "../hooks/useAnalytics";
 
 /* ─── Font injection ─────────────────────────────────────────────────────── */
 const FONT_HREF =
@@ -61,6 +61,7 @@ const MONTH_LABELS = [
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 const inrFmt = (v) => `₹${Number(v).toLocaleString("en-IN")}`;
+
 const shortFmt = (v) =>
   v >= 1_00_000
     ? `₹${(v / 1_00_000).toFixed(1)}L`
@@ -225,113 +226,70 @@ const EmptyChart = ({ msg = "No data for selected period" }) => (
   </div>
 );
 
+/* ─── Error banner ───────────────────────────────────────────────────────── */
+const ErrorBanner = ({ message, onRetry }) => (
+  <div className="flex items-center justify-between gap-4 px-5 py-3.5 rounded-xl border border-red-500/20 bg-red-500/8 mb-6">
+    <p
+      className="text-sm text-red-400"
+      style={{ fontFamily: "'Sora', sans-serif" }}
+    >
+      {message}
+    </p>
+    {onRetry && (
+      <button
+        onClick={onRetry}
+        className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded-lg hover:bg-red-500/10 transition-colors shrink-0"
+      >
+        Retry
+      </button>
+    )}
+  </div>
+);
+
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  REPORTS PAGE                                                               */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 const Reports = () => {
   useFonts();
 
-  const { transactions, loading } = useTransactions();
-
   /* ── Toolbar state ── */
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(String(currentYear));
-  const [month, setMonth] = useState(""); // "" = all months
+  // month is a JS month index string ("0"–"11") or "" for full-year
+  const [month, setMonth] = useState("");
 
-  /* ── Year options: current year ± 4 ── */
   const yearOptions = useMemo(
     () => Array.from({ length: 5 }, (_, i) => String(currentYear - 2 + i)),
     [currentYear],
   );
 
-  /* ── Filter transactions by selected year / month ── */
-  const filtered = useMemo(() => {
-    return transactions.filter((t) => {
-      const d = new Date(t.date);
-      if (String(d.getFullYear()) !== year) return false;
-      if (month !== "" && d.getMonth() !== Number(month)) return false;
-      return true;
-    });
-  }, [transactions, year, month]);
+  /* ── Analytics data from backend ── */
+  const {
+    monthlyBuckets,
+    stats,
+    expenseCategories,
+    incomeCategories,
+    peakMonth,
+    loading,
+    error,
+    refresh,
+  } = useAnalytics(year, month);
 
-  /* ── Top-level stats ── */
-  const stats = useMemo(() => {
-    const income = filtered
-      .filter((t) => t.type === "income")
-      .reduce((s, t) => s + t.amount, 0);
-    const expense = filtered
-      .filter((t) => t.type === "expense")
-      .reduce((s, t) => s + t.amount, 0);
-    const balance = income - expense;
-    const savingsRate = pct(balance, income);
-    return { income, expense, balance, savingsRate };
-  }, [filtered]);
+  /* ── Derived flags ── */
+  const hasMonthly = monthlyBuckets.some((b) => b.income > 0 || b.expense > 0);
+  const hasExpenses = expenseCategories.length > 0;
+  const hasData = stats.income > 0 || stats.expense > 0;
+  const isFullYear = month === "";
 
-  /* ── Monthly breakdown (always 12 months for the bar/area chart) ── */
-  const monthlyData = useMemo(
-    () =>
-      MONTH_LABELS.map((label, i) => {
-        const txInMonth = transactions.filter((t) => {
-          const d = new Date(t.date);
-          return String(d.getFullYear()) === year && d.getMonth() === i;
-        });
-        const income = txInMonth
-          .filter((t) => t.type === "income")
-          .reduce((s, t) => s + t.amount, 0);
-        const expense = txInMonth
-          .filter((t) => t.type === "expense")
-          .reduce((s, t) => s + t.amount, 0);
-        return { month: label, income, expense, net: income - expense };
-      }),
-    [transactions, year],
-  );
+  /* ── Savings rate ── */
+  const savingsRate = pct(stats.balance, stats.income);
 
-  /* ── Category breakdown ── */
-  const categoryData = useMemo(() => {
-    const map = {};
-    filtered.forEach((t) => {
-      if (t.type !== "expense") return;
-      const name =
-        t.categoryName ||
-        (typeof t.category === "object" ? t.category?.name : null) ||
-        "Other";
-      map[name] = (map[name] || 0) + t.amount;
-    });
-    return Object.entries(map)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [filtered]);
+  /* ── Selected month label for display ── */
+  const periodLabel = isFullYear
+    ? `Full year ${year}`
+    : `${MONTH_LABELS[Number(month)]} ${year}`;
 
-  /* ── Income category breakdown ── */
-  const incomeCategoryData = useMemo(() => {
-    const map = {};
-    filtered.forEach((t) => {
-      if (t.type !== "income") return;
-      const name =
-        t.categoryName ||
-        (typeof t.category === "object" ? t.category?.name : null) ||
-        "Other";
-      map[name] = (map[name] || 0) + t.amount;
-    });
-    return Object.entries(map)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [filtered]);
-
-  /* ── Best / worst month ── */
-  const peakMonth = useMemo(() => {
-    const best = monthlyData.reduce(
-      (acc, d) => (d.net > acc.net ? d : acc),
-      monthlyData[0],
-    );
-    return best;
-  }, [monthlyData]);
-
-  const hasData = filtered.length > 0;
-  const hasExpenses = categoryData.length > 0;
-  const hasMonthly = monthlyData.some((d) => d.income > 0 || d.expense > 0);
-
-  /* ── Loading ── */
+  /* ── Loading skeleton ── */
   if (loading) {
     return (
       <div
@@ -403,7 +361,7 @@ const Reports = () => {
             ))}
           </select>
 
-          {/* Month chips — scrollable on mobile */}
+          {/* Month chips */}
           <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
             <button
               onClick={() => setMonth("")}
@@ -447,11 +405,12 @@ const Reports = () => {
             Financial Reports
           </h1>
           <p className="text-sm text-[#52525b] mt-1">
-            {month !== ""
-              ? `${MONTH_LABELS[Number(month)]} ${year} · ${filtered.length} transactions`
-              : `Full year ${year} · ${filtered.length} transactions`}
+            {periodLabel} · data from all transactions
           </p>
         </div>
+
+        {/* ── Error banner ── */}
+        {error && <ErrorBanner message={error} onRetry={refresh} />}
 
         {/* ══════════════════════════════════════════════════════════════════
             ANALYTICS CARDS
@@ -474,7 +433,7 @@ const Reports = () => {
               label="Total Income"
               value={inrFmt(stats.income)}
               icon="↑"
-              sub={`${filtered.filter((t) => t.type === "income").length} transactions`}
+              sub={periodLabel}
               borderColor="#4ade80"
               glowColor="rgba(74,222,128,0.10)"
               textColor="#4ade80"
@@ -483,27 +442,27 @@ const Reports = () => {
               label="Total Expenses"
               value={inrFmt(stats.expense)}
               icon="↓"
-              sub={`${filtered.filter((t) => t.type === "expense").length} transactions`}
+              sub={periodLabel}
               borderColor="#f87171"
               glowColor="rgba(248,113,113,0.10)"
               textColor="#f87171"
             />
             <StatCard
               label="Savings Rate"
-              value={`${stats.savingsRate}%`}
+              value={`${savingsRate}%`}
               icon="◎"
               sub={`₹${Number(Math.max(0, stats.balance)).toLocaleString("en-IN")} saved`}
               borderColor="#facc15"
               glowColor="rgba(250,204,21,0.08)"
               textColor="#facc15"
               badge={
-                stats.savingsRate >= 20
+                savingsRate >= 20
                   ? {
                       text: "On track",
                       bg: "rgba(74,222,128,0.15)",
                       color: "#4ade80",
                     }
-                  : stats.savingsRate > 0
+                  : savingsRate > 0
                     ? {
                         text: "Low",
                         bg: "rgba(250,204,21,0.15)",
@@ -520,19 +479,23 @@ const Reports = () => {
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════
-            CHARTS GRID
+            CHARTS
         ══════════════════════════════════════════════════════════════════ */}
         <div>
           <SectionLabel>Trends</SectionLabel>
           <div className="space-y-5">
-            {/* ── Monthly Income vs Expense (bar chart — full width) ── */}
+            {/* ── Monthly Income vs Expense bar chart (always shows full year) ── */}
             <ChartPanel
               title="Monthly Income vs Expense"
               subtitle={`${year} — all 12 months`}
             >
               {hasMonthly ? (
                 <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={monthlyData} barCategoryGap="30%" barGap={2}>
+                  <BarChart
+                    data={monthlyBuckets}
+                    barCategoryGap="30%"
+                    barGap={2}
+                  >
                     <CartesianGrid
                       strokeDasharray="1 4"
                       stroke="#27272a"
@@ -599,7 +562,7 @@ const Reports = () => {
             >
               {hasMonthly ? (
                 <ResponsiveContainer width="100%" height={180}>
-                  <AreaChart data={monthlyData}>
+                  <AreaChart data={monthlyBuckets}>
                     <defs>
                       <linearGradient
                         id="netGradientPos"
@@ -616,24 +579,6 @@ const Reports = () => {
                         <stop
                           offset="95%"
                           stopColor="#4ade80"
-                          stopOpacity={0.02}
-                        />
-                      </linearGradient>
-                      <linearGradient
-                        id="netGradientNeg"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#f87171"
-                          stopOpacity={0.25}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#f87171"
                           stopOpacity={0.02}
                         />
                       </linearGradient>
@@ -692,41 +637,39 @@ const Reports = () => {
                 subtitle="Where your money went"
               >
                 {hasExpenses ? (
-                  <>
-                    <ResponsiveContainer width="100%" height={220}>
-                      <PieChart>
-                        <Pie
-                          data={categoryData}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={50}
-                          outerRadius={85}
-                          paddingAngle={3}
-                          strokeWidth={0}
-                        >
-                          {categoryData.map((_, i) => (
-                            <Cell
-                              key={i}
-                              fill={PIE_COLORS[i % PIE_COLORS.length]}
-                              opacity={0.88}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<DarkTooltip />} />
-                        <Legend
-                          iconType="circle"
-                          iconSize={7}
-                          wrapperStyle={{
-                            fontSize: 11,
-                            color: "#71717a",
-                            fontFamily: "'Sora',sans-serif",
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={expenseCategories}
+                        dataKey="total"
+                        nameKey="category"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={85}
+                        paddingAngle={3}
+                        strokeWidth={0}
+                      >
+                        {expenseCategories.map((_, i) => (
+                          <Cell
+                            key={i}
+                            fill={PIE_COLORS[i % PIE_COLORS.length]}
+                            opacity={0.88}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<DarkTooltip />} />
+                      <Legend
+                        iconType="circle"
+                        iconSize={7}
+                        wrapperStyle={{
+                          fontSize: 11,
+                          color: "#71717a",
+                          fontFamily: "'Sora',sans-serif",
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
                 ) : (
                   <EmptyChart msg="No expense data for this period" />
                 )}
@@ -737,13 +680,13 @@ const Reports = () => {
                 title="Income by Source"
                 subtitle="Where your money came from"
               >
-                {incomeCategoryData.length > 0 ? (
+                {incomeCategories.length > 0 ? (
                   <ResponsiveContainer width="100%" height={220}>
                     <PieChart>
                       <Pie
-                        data={incomeCategoryData}
-                        dataKey="value"
-                        nameKey="name"
+                        data={incomeCategories}
+                        dataKey="total"
+                        nameKey="category"
                         cx="50%"
                         cy="50%"
                         innerRadius={50}
@@ -751,7 +694,7 @@ const Reports = () => {
                         paddingAngle={3}
                         strokeWidth={0}
                       >
-                        {incomeCategoryData.map((_, i) => (
+                        {incomeCategories.map((_, i) => (
                           <Cell
                             key={i}
                             fill={
@@ -813,12 +756,12 @@ const Reports = () => {
               </div>
 
               {/* Rows */}
-              {categoryData.map((cat, idx) => {
-                const sharePct = pct(cat.value, stats.expense);
+              {expenseCategories.map((cat, idx) => {
+                const sharePct = pct(cat.total, stats.expense);
                 const accentColor = PIE_COLORS[idx % PIE_COLORS.length];
                 return (
                   <div
-                    key={cat.name}
+                    key={cat.category}
                     className={[
                       "grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center",
                       "px-5 py-3 border-b border-[#27272a]/40 last:border-0",
@@ -836,7 +779,7 @@ const Reports = () => {
                         className="text-sm text-[#e4e4e7] font-medium truncate"
                         style={{ fontFamily: "'Sora', sans-serif" }}
                       >
-                        {cat.name}
+                        {cat.category}
                       </span>
                     </div>
 
@@ -845,7 +788,7 @@ const Reports = () => {
                       className="text-sm font-semibold tabular-nums text-[#f87171]"
                       style={{ fontFamily: "'JetBrains Mono', monospace" }}
                     >
-                      {inrFmt(cat.value)}
+                      {inrFmt(cat.total)}
                     </span>
 
                     {/* Share */}
@@ -899,9 +842,9 @@ const Reports = () => {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            PEAK MONTH INSIGHT
+            PEAK MONTH INSIGHT (full-year only)
         ══════════════════════════════════════════════════════════════════ */}
-        {hasMonthly && month === "" && (
+        {hasMonthly && isFullYear && (
           <div>
             <SectionLabel>Insight</SectionLabel>
             <div
@@ -923,7 +866,7 @@ const Reports = () => {
                 >
                   {peakMonth.net > 0
                     ? `${peakMonth.month} had the highest net surplus.`
-                    : `No profitable month found this year.`}
+                    : "No profitable month found this year."}
                 </p>
               </div>
               {peakMonth.net > 0 && (
@@ -946,8 +889,8 @@ const Reports = () => {
           </div>
         )}
 
-        {/* ── Empty state (no transactions at all for this period) ── */}
-        {!hasData && (
+        {/* ── Empty state ── */}
+        {!hasData && !error && (
           <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
             <span className="text-5xl opacity-20">◉</span>
             <p
@@ -955,7 +898,7 @@ const Reports = () => {
               style={{ fontFamily: "'Sora', sans-serif" }}
             >
               No transactions for{" "}
-              {month !== "" ? MONTH_LABELS[Number(month)] + " " : ""}
+              {!isFullYear ? `${MONTH_LABELS[Number(month)]} ` : ""}
               {year}
             </p>
             <p
@@ -964,7 +907,7 @@ const Reports = () => {
             >
               Try selecting a different year or month.
             </p>
-            {month !== "" && (
+            {!isFullYear && (
               <button
                 onClick={() => setMonth("")}
                 className="text-xs text-[#6366f1] hover:text-[#818cf8] transition-colors mt-1"

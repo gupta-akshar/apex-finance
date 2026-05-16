@@ -1,18 +1,17 @@
 import mongoose from "mongoose";
 import Transaction from "../models/Transaction.js";
 
-/**
- * Utility: Get month date range
- */
+// ─── Utility ──────────────────────────────────────────────────────────────────
+
 const getMonthDateRange = (month, year) => {
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59);
   return { startDate, endDate };
 };
 
-/**
- * 1️⃣ Monthly Summary
- */
+// ─── 1. Monthly Summary ───────────────────────────────────────────────────────
+// Returns income, expense, balance for a single calendar month.
+
 export const getMonthlySummaryService = async (userId, month, year) => {
   const { startDate, endDate } = getMonthDateRange(month, year);
 
@@ -39,16 +38,13 @@ export const getMonthlySummaryService = async (userId, month, year) => {
     if (item._id === "expense") expense = item.total;
   });
 
-  return {
-    income,
-    expense,
-    balance: income - expense,
-  };
+  return { income, expense, balance: income - expense };
 };
 
-/**
- * 2️⃣ Category Breakdown (Filtered by type + optional month/year)
- */
+// ─── 2. Category Breakdown ────────────────────────────────────────────────────
+// Returns totals grouped by category NAME (via $lookup).
+// Filters by type (required), and optionally by month+year or year alone.
+
 export const getCategoryBreakdownService = async (
   userId,
   type,
@@ -63,56 +59,75 @@ export const getCategoryBreakdownService = async (
   if (month && year) {
     const { startDate, endDate } = getMonthDateRange(month, year);
     matchStage.date = { $gte: startDate, $lte: endDate };
+  } else if (year) {
+    // Full-year filter — no month constraint
+    matchStage.date = {
+      $gte: new Date(year, 0, 1),
+      $lte: new Date(year, 11, 31, 23, 59, 59),
+    };
   }
 
   return await Transaction.aggregate([
     { $match: matchStage },
+    // Join with categories collection to resolve human-readable names
+    {
+      $lookup: {
+        from: "categories",
+        localField: "category",
+        foreignField: "_id",
+        as: "categoryDoc",
+      },
+    },
+    {
+      $unwind: {
+        path: "$categoryDoc",
+        preserveNullAndEmpty: true,
+      },
+    },
     {
       $group: {
-        _id: "$category",
+        _id: {
+          categoryId: "$category",
+          categoryName: "$categoryDoc.name",
+        },
         total: { $sum: "$amount" },
       },
     },
     {
       $project: {
-        category: "$_id",
-        total: 1,
         _id: 0,
+        // Fall back to "Unknown" when the category was deleted
+        category: { $ifNull: ["$_id.categoryName", "Unknown"] },
+        total: 1,
       },
     },
     { $sort: { total: -1 } },
   ]);
 };
 
-/**
- * 3️⃣ Overview (All-time stats)
- */
+// ─── 3. Overview ──────────────────────────────────────────────────────────────
+// All-time totals across every transaction for this user.
+
 export const getOverviewService = async (userId) => {
   const result = await Transaction.aggregate([
     {
-      $match: {
-        user: new mongoose.Types.ObjectId(userId),
-      },
+      $match: { user: new mongoose.Types.ObjectId(userId) },
     },
     {
       $group: {
         _id: null,
         totalIncome: {
-          $sum: {
-            $cond: [{ $eq: ["$type", "income"] }, "$amount", 0],
-          },
+          $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] },
         },
         totalExpense: {
-          $sum: {
-            $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0],
-          },
+          $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] },
         },
         transactionsCount: { $sum: 1 },
       },
     },
   ]);
 
-  const data = result[0] || {
+  const data = result[0] ?? {
     totalIncome: 0,
     totalExpense: 0,
     transactionsCount: 0,
@@ -126,9 +141,16 @@ export const getOverviewService = async (userId) => {
   };
 };
 
-/**
- * 4️⃣ Monthly Trend (Yearly Expense Trend)
- */
+// ─── 4. Monthly Trend ─────────────────────────────────────────────────────────
+// Returns per-month income AND expense totals for every month in the given year.
+//
+// Response shape (raw):
+//   [{ month: 1, type: "income", total: 5000 }, { month: 1, type: "expense", total: 2000 }, ...]
+//
+// The frontend transforms this flat list into the 12-bucket array required by
+// the bar / area charts.  Months with zero transactions are omitted here and
+// filled to 0 on the client side.
+
 export const getMonthlyTrendService = async (userId, year) => {
   const startDate = new Date(year, 0, 1);
   const endDate = new Date(year, 11, 31, 23, 59, 59);
@@ -137,23 +159,26 @@ export const getMonthlyTrendService = async (userId, year) => {
     {
       $match: {
         user: new mongoose.Types.ObjectId(userId),
-        type: "expense",
         date: { $gte: startDate, $lte: endDate },
       },
     },
     {
       $group: {
-        _id: { month: { $month: "$date" } },
-        totalExpense: { $sum: "$amount" },
+        _id: {
+          month: { $month: "$date" },
+          type: "$type",
+        },
+        total: { $sum: "$amount" },
       },
     },
     {
       $project: {
-        month: "$_id.month",
-        totalExpense: 1,
         _id: 0,
+        month: "$_id.month",
+        type: "$_id.type",
+        total: 1,
       },
     },
-    { $sort: { month: 1 } },
+    { $sort: { month: 1, type: 1 } },
   ]);
 };
