@@ -5,6 +5,7 @@ import { useAuth } from "../hooks/useAuth";
 import TransactionModal from "../components/TransactionModal";
 import SummaryCard from "../components/SummaryCard";
 import { ExpensePieChart, IncomeExpenseBarChart } from "../components/Chart";
+import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 
 /* ─── Font injection ─────────────────────────────────────────────────────── */
 const FONT_HREF =
@@ -145,6 +146,26 @@ const SectionLabel = ({ children }) => (
   </p>
 );
 
+/* ─── Inline analytics error banner ─────────────────────────────────────── */
+const AnalyticsError = ({ message, onRetry }) => (
+  <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-xl border border-red-500/20 bg-red-500/8 mb-4">
+    <p
+      className="text-sm text-red-400"
+      style={{ fontFamily: "'Sora', sans-serif" }}
+    >
+      {message}
+    </p>
+    {onRetry && (
+      <button
+        onClick={onRetry}
+        className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded-lg hover:bg-red-500/10 transition-colors shrink-0"
+      >
+        Retry
+      </button>
+    )}
+  </div>
+);
+
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  DASHBOARD                                                                  */
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -152,63 +173,45 @@ const Dashboard = () => {
   useFonts();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { transactions, loading } = useTransactions();
+
+  // ── Recent transactions only — NOT used for any aggregation ──────────────
+  // We keep page=1 / limit=5 in context so the recent-activity panel always
+  // shows the five latest entries without any extra request.
+  const { transactions: recentTransactions, loading: recentLoading } =
+    useTransactions();
+
+  // Slice to 5 regardless of whatever limit the context currently uses
+  const recentTx = useMemo(
+    () => recentTransactions.slice(0, 5),
+    [recentTransactions],
+  );
+
+  // ── Server-driven analytics ───────────────────────────────────────────────
+  // All numbers for stats cards and charts come from the analytics API.
+  // These are independent of the paginated transaction context.
+  const {
+    stats,
+    monthlyData,
+    categoryData,
+    loading: analyticsLoading,
+    error: analyticsError,
+    refresh: refreshAnalytics,
+  } = useDashboardAnalytics();
 
   const [modalMode, setModalMode] = useState(null); // "income" | "expense" | null
 
-  /* ── Derived stats ── */
-  const stats = useMemo(() => {
-    const totalIncome = transactions
-      .filter((t) => t.type === "income")
-      .reduce((s, t) => s + t.amount, 0);
-    const totalExpense = transactions
-      .filter((t) => t.type === "expense")
-      .reduce((s, t) => s + t.amount, 0);
-    const balance = totalIncome - totalExpense;
-    return { totalIncome, totalExpense, balance };
-  }, [transactions]);
+  // Re-fetch analytics after a transaction is added so charts update immediately
+  const handleModalClose = () => {
+    setModalMode(null);
+    refreshAnalytics();
+  };
 
-  /* ── Recent 5 ── */
-  const recentTx = useMemo(() => [...transactions].slice(0, 5), [transactions]);
+  // ── Combined loading state for the initial skeleton ───────────────────────
+  // Show skeleton only on the very first load; subsequent re-fetches (e.g.
+  // after adding a transaction) show inline spinners instead.
+  const isFirstLoad = analyticsLoading && stats.transactionsCount === 0;
 
-  /* ── Pie data ── */
-  const categoryData = useMemo(() => {
-    const map = {};
-    transactions.forEach((t) => {
-      if (t.type !== "expense") return;
-      const key =
-        t.categoryName ||
-        (typeof t.category === "object" ? t.category?.name : null) ||
-        "Other";
-      map[key] = (map[key] || 0) + t.amount;
-    });
-    return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [transactions]);
-
-  /* ── Monthly bar data ── */
-  const monthlyData = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, i) => {
-        const month = transactions.filter(
-          (t) => new Date(t.date).getMonth() === i,
-        );
-        return {
-          month: ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"][
-            i
-          ],
-          income: month
-            .filter((t) => t.type === "income")
-            .reduce((s, t) => s + t.amount, 0),
-          expense: month
-            .filter((t) => t.type === "expense")
-            .reduce((s, t) => s + t.amount, 0),
-        };
-      }),
-    [transactions],
-  );
-
-  /* ── Loading skeleton ── */
-  if (loading) {
+  if (isFirstLoad) {
     return (
       <div className="min-h-screen bg-[#0a0a0c] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -289,8 +292,13 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* ── Analytics error banner ── */}
+        {analyticsError && (
+          <AnalyticsError message={analyticsError} onRetry={refreshAnalytics} />
+        )}
+
         {/* ══════════════════════════════════════════════════════════════════
-            STATS CARDS
+            STATS CARDS  — server data via useDashboardAnalytics
         ══════════════════════════════════════════════════════════════════ */}
         <div>
           <SectionLabel>Overview</SectionLabel>
@@ -300,7 +308,7 @@ const Dashboard = () => {
               value={stats.balance}
               color="text-white"
               icon="⚖"
-              sub="Income minus expenses"
+              sub="All-time income minus expenses"
             />
             <SummaryCard
               title="Total Income"
@@ -316,8 +324,10 @@ const Dashboard = () => {
               icon="↓"
               sub="All time"
             />
+
+            {/* Transaction count card — navigates to full list */}
             <div
-              className="relative rounded-xl overflow-hidden border border-[#27272a] hover:border-[#3f3f46] transition-all duration-200 group cursor-default"
+              className="relative rounded-xl overflow-hidden border border-[#27272a] hover:border-[#3f3f46] transition-all duration-200 group cursor-pointer"
               style={{
                 background: "linear-gradient(145deg, #18181b 0%, #141416 100%)",
               }}
@@ -326,7 +336,6 @@ const Dashboard = () => {
               tabIndex={0}
               onKeyDown={(e) => e.key === "Enter" && navigate("/transactions")}
             >
-              {/* Left border accent */}
               <div
                 className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl"
                 style={{ background: "#6366f1" }}
@@ -343,15 +352,19 @@ const Dashboard = () => {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#71717a]">
                     Transactions
                   </p>
-                  <span className="text-base opacity-40 group-hover:opacity-70 transition-opacity">
-                    ◈
-                  </span>
+                  {analyticsLoading ? (
+                    <span className="w-3 h-3 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span className="text-base opacity-40 group-hover:opacity-70 transition-opacity">
+                      ◈
+                    </span>
+                  )}
                 </div>
                 <p
                   className="text-2xl font-semibold tabular-nums leading-none text-[#a5b4fc]"
                   style={{ fontFamily: "'JetBrains Mono', monospace" }}
                 >
-                  {transactions.length}
+                  {stats.transactionsCount}
                 </p>
                 <p className="mt-1.5 text-[11px] text-[#52525b]">
                   Click to view all
@@ -365,18 +378,36 @@ const Dashboard = () => {
             CHARTS + RECENT TRANSACTIONS
         ══════════════════════════════════════════════════════════════════ */}
         <div className="grid lg:grid-cols-3 gap-5">
-          {/* ── Charts (2/3 width) ── */}
+          {/* ── Charts (2/3 width) — server data ── */}
           <div className="lg:col-span-2 space-y-5">
             <SectionLabel>Analytics</SectionLabel>
 
-            {/* Bar chart — full width */}
-            <IncomeExpenseBarChart data={monthlyData} />
+            {analyticsLoading ? (
+              /* Skeleton placeholders while refreshing after a new transaction */
+              <div className="space-y-5">
+                {[260, 260].map((h, i) => (
+                  <div
+                    key={i}
+                    className="rounded-xl border border-[#27272a] animate-pulse"
+                    style={{
+                      height: h,
+                      background: "linear-gradient(145deg,#18181b,#141416)",
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <>
+                {/* Bar chart — full-year monthly breakdown from /analytics/trend */}
+                <IncomeExpenseBarChart data={monthlyData} />
 
-            {/* Pie chart — full width on this col */}
-            <ExpensePieChart data={categoryData} />
+                {/* Pie chart — expense breakdown from /analytics/categories */}
+                <ExpensePieChart data={categoryData} />
+              </>
+            )}
           </div>
 
-          {/* ── Recent Transactions (1/3 width) ── */}
+          {/* ── Recent Transactions (1/3 width) — paginated context is fine here ── */}
           <div className="flex flex-col">
             <SectionLabel>Recent Activity</SectionLabel>
 
@@ -404,7 +435,11 @@ const Dashboard = () => {
 
               {/* Transaction rows */}
               <div className="px-5 py-3">
-                {recentTx.length === 0 ? (
+                {recentLoading ? (
+                  <div className="py-10 flex justify-center">
+                    <div className="w-5 h-5 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : recentTx.length === 0 ? (
                   <div className="py-10 flex flex-col items-center gap-2 text-center">
                     <span className="text-3xl opacity-20">🗒</span>
                     <p className="text-sm text-[#52525b]">
@@ -501,7 +536,7 @@ const Dashboard = () => {
 
       {/* ── Transaction Modal ── */}
       {modalMode && (
-        <TransactionModal mode={modalMode} onClose={() => setModalMode(null)} />
+        <TransactionModal mode={modalMode} onClose={handleModalClose} />
       )}
     </div>
   );

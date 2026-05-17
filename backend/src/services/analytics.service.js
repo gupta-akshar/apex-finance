@@ -60,7 +60,6 @@ export const getCategoryBreakdownService = async (
     const { startDate, endDate } = getMonthDateRange(month, year);
     matchStage.date = { $gte: startDate, $lte: endDate };
   } else if (year) {
-    // Full-year filter — no month constraint
     matchStage.date = {
       $gte: new Date(year, 0, 1),
       $lte: new Date(year, 11, 31, 23, 59, 59),
@@ -69,7 +68,6 @@ export const getCategoryBreakdownService = async (
 
   return await Transaction.aggregate([
     { $match: matchStage },
-    // Join with categories collection to resolve human-readable names
     {
       $lookup: {
         from: "categories",
@@ -79,9 +77,11 @@ export const getCategoryBreakdownService = async (
       },
     },
     {
+      // FIX: was "preserveNullAndEmpty" (unknown option → MongoServerError on
+      // MongoDB 5+).  Correct field name is "preserveNullAndEmptyArrays".
       $unwind: {
         path: "$categoryDoc",
-        preserveNullAndEmpty: true,
+        preserveNullAndEmptyArrays: true,
       },
     },
     {
@@ -96,7 +96,6 @@ export const getCategoryBreakdownService = async (
     {
       $project: {
         _id: 0,
-        // Fall back to "Unknown" when the category was deleted
         category: { $ifNull: ["$_id.categoryName", "Unknown"] },
         total: 1,
       },
@@ -143,13 +142,6 @@ export const getOverviewService = async (userId) => {
 
 // ─── 4. Monthly Trend ─────────────────────────────────────────────────────────
 // Returns per-month income AND expense totals for every month in the given year.
-//
-// Response shape (raw):
-//   [{ month: 1, type: "income", total: 5000 }, { month: 1, type: "expense", total: 2000 }, ...]
-//
-// The frontend transforms this flat list into the 12-bucket array required by
-// the bar / area charts.  Months with zero transactions are omitted here and
-// filled to 0 on the client side.
 
 export const getMonthlyTrendService = async (userId, year) => {
   const startDate = new Date(year, 0, 1);
