@@ -4,6 +4,7 @@ import {
   addRecurringTransaction,
   updateRecurringTransaction,
   deleteRecurringTransaction,
+  toggleRecurringTransaction,
 } from "../api/recurringApi";
 import { getCategories } from "../api/categoryApi";
 
@@ -50,16 +51,11 @@ const EMPTY_FORM = {
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 const inrFmt = (v) => `₹${Number(v).toLocaleString("en-IN")}`;
 
-/** Days until next occurrence from today */
 const daysUntil = (dateStr) => {
   if (!dateStr) return null;
-  const diff = Math.ceil(
-    (new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24),
-  );
-  return diff;
+  return Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
 };
 
-/** Human-readable countdown */
 const countdown = (dateStr) => {
   const d = daysUntil(dateStr);
   if (d === null) return null;
@@ -69,7 +65,6 @@ const countdown = (dateStr) => {
   return `In ${d}d`;
 };
 
-/** Monthly equivalent of any frequency */
 const toMonthly = (amount, frequency) => {
   const a = Number(amount);
   switch (frequency) {
@@ -92,6 +87,22 @@ const fmtDate = (d) =>
         year: "numeric",
       })
     : "—";
+
+/**
+ * Resolve the category name from a recurring item.
+ * The server may return category as an ObjectId string or a populated object
+ * depending on whether the controller populates it in the future.
+ */
+const resolveCategoryName = (item, categories) => {
+  if (item.categoryName) return item.categoryName;
+  if (typeof item.category === "object" && item.category?.name)
+    return item.category.name;
+  // Fallback: look up in the locally-fetched categories array
+  const found = categories.find(
+    (c) => c._id === item.category || c._id === item.category?._id,
+  );
+  return found?.name ?? "Uncategorised";
+};
 
 /* ─── Shared input class ─────────────────────────────────────────────────── */
 const inputCls = [
@@ -211,7 +222,7 @@ const DeleteConfirm = ({ name, onConfirm, onCancel }) => (
   </div>
 );
 
-/* ─── Field wrapper — declared outside RecurringForm to satisfy react-hooks/static-components ── */
+/* ─── Field wrapper ──────────────────────────────────────────────────────── */
 const Field = ({ label, error, children }) => (
   <div>
     <label
@@ -322,7 +333,6 @@ const RecurringForm = ({
 
       {/* Row 2: Type + Category + Frequency */}
       <div className="grid sm:grid-cols-3 gap-3 mb-3">
-        {/* Type segmented control */}
         <Field label="Type" error={errors.type}>
           <div
             className="flex rounded-lg border border-[#27272a] overflow-hidden"
@@ -460,17 +470,23 @@ const RecurringForm = ({
 };
 
 /* ─── Recurring Row ──────────────────────────────────────────────────────── */
-const RecurringRow = ({ item, onEdit, onDelete, onToggle, toggling, idx }) => {
+const RecurringRow = ({
+  item,
+  categories,
+  onEdit,
+  onDelete,
+  onToggle,
+  toggling,
+  idx,
+}) => {
   const [hovered, setHovered] = useState(false);
   const isIncome = item.type === "income";
   const tc = TYPE_COLORS[item.type];
   const nextLabel = countdown(item.nextDate);
   const isOverdue = nextLabel === "Overdue";
   const isToday = nextLabel === "Today";
-  const catName =
-    item.categoryName ||
-    (typeof item.category === "object" ? item.category?.name : null) ||
-    "Uncategorised";
+
+  const catName = resolveCategoryName(item, categories);
 
   return (
     <div
@@ -499,7 +515,7 @@ const RecurringRow = ({ item, onEdit, onDelete, onToggle, toggling, idx }) => {
               className="text-sm font-medium text-[#e4e4e7] truncate"
               style={{ fontFamily: "'Sora', sans-serif" }}
             >
-              {item.title}
+              {item.title || catName}
             </p>
             <FrequencyBadge frequency={item.frequency} />
           </div>
@@ -508,7 +524,7 @@ const RecurringRow = ({ item, onEdit, onDelete, onToggle, toggling, idx }) => {
             style={{ fontFamily: "'Sora', sans-serif" }}
           >
             {catName}
-            {item.note && ` · ${item.note}`}
+            {item.note ? ` · ${item.note}` : ""}
           </p>
         </div>
       </div>
@@ -522,7 +538,7 @@ const RecurringRow = ({ item, onEdit, onDelete, onToggle, toggling, idx }) => {
             style={{ fontFamily: "'Sora', sans-serif" }}
           >
             {fmtDate(item.startDate)}
-            {item.endDate && ` → ${fmtDate(item.endDate)}`}
+            {item.endDate ? ` → ${fmtDate(item.endDate)}` : ""}
           </p>
           {nextLabel && (
             <p
@@ -557,14 +573,14 @@ const RecurringRow = ({ item, onEdit, onDelete, onToggle, toggling, idx }) => {
           </p>
         </div>
 
-        {/* Status toggle */}
+        {/* Status toggle — uses isActive */}
         <StatusToggle
           active={item.isActive}
-          loading={toggling === item._id}
+          loading={toggling}
           onClick={() => onToggle(item._id, item.isActive)}
         />
 
-        {/* Action buttons — visible on hover */}
+        {/* Action buttons */}
         <div
           className={[
             "flex items-center gap-1 transition-opacity duration-150",
@@ -640,17 +656,16 @@ const RecurringTransactions = () => {
   const [categories, setCategories] = useState([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [toggling, setToggling] = useState(null); // id currently toggling
+  // toggling holds the _id of the item currently mid-toggle (or null)
+  const [toggling, setToggling] = useState(null);
 
-  /* ── UI state ── */
   const [showForm, setShowForm] = useState(false);
-  const [editTarget, setEditTarget] = useState(null); // item being edited
-  const [deleteTarget, setDeleteTarget] = useState(null); // { _id, title }
+  const [editTarget, setEditTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
-  /* ── Filter state ── */
-  const [filterType, setFilterType] = useState(""); // "" | "income" | "expense"
-  const [filterFreq, setFilterFreq] = useState(""); // "" | "daily"|"weekly"|...
-  const [filterStatus, setFilterStatus] = useState(""); // "" | "active" | "paused"
+  const [filterType, setFilterType] = useState("");
+  const [filterFreq, setFilterFreq] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   const [search, setSearch] = useState("");
 
   /* ── Load ── */
@@ -683,32 +698,26 @@ const RecurringTransactions = () => {
       const q = search.toLowerCase();
       list = list.filter(
         (i) =>
-          i.title?.toLowerCase().includes(q) ||
-          (i.categoryName || "").toLowerCase().includes(q) ||
+          (i.title || "").toLowerCase().includes(q) ||
+          resolveCategoryName(i, categories).toLowerCase().includes(q) ||
           (i.note || "").toLowerCase().includes(q),
       );
     }
     return list;
-  }, [items, filterType, filterFreq, filterStatus, search]);
+  }, [items, filterType, filterFreq, filterStatus, search, categories]);
 
-  /* ── Derived: aggregate stats ── */
+  /* ── Stats ── */
   const stats = useMemo(() => {
     const active = items.filter((i) => i.isActive);
-    const monthly = active.reduce(
-      (s, i) =>
-        s + (i.type === "expense" ? toMonthly(i.amount, i.frequency) : 0),
-      0,
-    );
-    const monthlyIn = active.reduce(
-      (s, i) =>
-        s + (i.type === "income" ? toMonthly(i.amount, i.frequency) : 0),
-      0,
-    );
     return {
       total: items.length,
       active: active.length,
-      monthlyOut: monthly,
-      monthlyIn,
+      monthlyOut: active
+        .filter((i) => i.type === "expense")
+        .reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0),
+      monthlyIn: active
+        .filter((i) => i.type === "income")
+        .reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0),
     };
   }, [items]);
 
@@ -750,46 +759,46 @@ const RecurringTransactions = () => {
     }
   };
 
-  /* ── Toggle active ── */
-  const handleToggle = async (id, currentActive) => {
-    // Find the full item so we can send a complete payload to PUT
-    const item = items.find((i) => i._id === id);
-    if (!item) return;
+  /* ── Toggle isActive ─────────────────────────────────────────────────────
+   *
+   * FIX summary:
+   *   1. Optimistic update flips isActive in local state immediately.
+   *   2. We call the dedicated toggleRecurringTransaction() which sends
+   *      ONLY { isActive: nextValue } — no extra fields that could be dropped
+   *      or that could corrupt the local item when the response comes back.
+   *   3. On success we merge ONLY isActive from the server response back into
+   *      the existing item, rather than replacing the whole item object.
+   *      This prevents the "title disappears after toggle" bug.
+   *   4. On error we rollback the optimistic update.
+   */
+  const handleToggle = async (id, currentIsActive) => {
+    const nextIsActive = !currentIsActive;
 
-    // Optimistic update — flip immediately
+    // 1. Optimistic flip
     setItems((prev) =>
-      prev.map((i) => (i._id === id ? { ...i, isActive: !i.isActive } : i)),
+      prev.map((i) => (i._id === id ? { ...i, isActive: nextIsActive } : i)),
     );
     setToggling(id);
 
     try {
-      // Send full item fields so backend validation doesn't reject the PUT
-      const payload = {
-        title: item.title,
-        type: item.type,
-        amount: item.amount,
-        category:
-          typeof item.category === "object"
-            ? item.category?._id
-            : item.category,
-        frequency: item.frequency,
-        startDate: item.startDate,
-        endDate: item.endDate || "",
-        note: item.note || "",
-        isActive: !currentActive, // ✅ matches RecurringTransaction model field
-      };
+      // 2. Send only { isActive: <newValue> } — nothing else
+      const serverDoc = await toggleRecurringTransaction(id, nextIsActive);
 
-      const res = await updateRecurringTransaction(id, payload);
-      // Unwrap: { recurringTransaction } | { data } | plain object
-      const updated = res?.recurringTransaction ?? res?.data ?? res ?? null;
-      if (updated?._id) {
-        setItems((prev) => prev.map((i) => (i._id === id ? updated : i)));
-      }
+      // 3. Merge only the confirmed isActive back — keep all other local fields
+      setItems((prev) =>
+        prev.map((i) =>
+          i._id === id
+            ? { ...i, isActive: serverDoc.isActive ?? nextIsActive }
+            : i,
+        ),
+      );
     } catch (err) {
       console.error("Toggle failed:", err);
-      // Rollback on error
+      // 4. Rollback on failure
       setItems((prev) =>
-        prev.map((i) => (i._id === id ? { ...i, isActive: !i.isActive } : i)),
+        prev.map((i) =>
+          i._id === id ? { ...i, isActive: currentIsActive } : i,
+        ),
       );
     } finally {
       setToggling(null);
@@ -812,6 +821,27 @@ const RecurringTransactions = () => {
 
   const isFiltered = filterType || filterFreq || filterStatus || search.trim();
 
+  /* ── Derive form initial values from editTarget ── */
+  const formInitial = editTarget
+    ? {
+        title: editTarget.title ?? "",
+        type: editTarget.type ?? "expense",
+        amount: editTarget.amount ?? "",
+        category:
+          typeof editTarget.category === "object"
+            ? editTarget.category?._id
+            : (editTarget.category ?? ""),
+        frequency: editTarget.frequency ?? "monthly",
+        startDate: editTarget.startDate
+          ? new Date(editTarget.startDate).toISOString().split("T")[0]
+          : "",
+        endDate: editTarget.endDate
+          ? new Date(editTarget.endDate).toISOString().split("T")[0]
+          : "",
+        note: editTarget.note ?? "",
+      }
+    : EMPTY_FORM;
+
   /* ── Loading ── */
   if (pageLoading) {
     return (
@@ -828,22 +858,6 @@ const RecurringTransactions = () => {
       </div>
     );
   }
-
-  const formInitial = editTarget
-    ? {
-        title: editTarget.title ?? "",
-        type: editTarget.type ?? "expense",
-        amount: editTarget.amount ?? "",
-        category:
-          typeof editTarget.category === "object"
-            ? editTarget.category?._id
-            : (editTarget.category ?? ""),
-        frequency: editTarget.frequency ?? "monthly",
-        startDate: editTarget.startDate?.split("T")[0] ?? "",
-        endDate: editTarget.endDate?.split("T")[0] ?? "",
-        note: editTarget.note ?? "",
-      }
-    : EMPTY_FORM;
 
   return (
     <div
@@ -947,7 +961,6 @@ const RecurringTransactions = () => {
             </button>
           )}
 
-          {/* Spacer */}
           <div className="flex-1" />
 
           {/* Add button */}
@@ -1005,28 +1018,24 @@ const RecurringTransactions = () => {
               value: stats.total,
               textColor: "#a5b4fc",
               borderColor: "#6366f1",
-              mono: true,
             },
             {
               label: "Active",
               value: stats.active,
               textColor: "#4ade80",
               borderColor: "#4ade80",
-              mono: true,
             },
             {
               label: "Monthly Out",
               value: inrFmt(stats.monthlyOut.toFixed(0)),
               textColor: "#f87171",
               borderColor: "#f87171",
-              mono: true,
             },
             {
               label: "Monthly In",
               value: inrFmt(stats.monthlyIn.toFixed(0)),
               textColor: "#4ade80",
               borderColor: "#4ade80",
-              mono: true,
             },
           ].map((s) => (
             <div
@@ -1084,7 +1093,6 @@ const RecurringTransactions = () => {
           />
         ) : (
           <div>
-            {/* Group header row */}
             <div className="flex items-center justify-between mb-3">
               <SectionLabel>
                 {isFiltered
@@ -1117,7 +1125,6 @@ const RecurringTransactions = () => {
               </div>
             </div>
 
-            {/* Table */}
             <div
               className="rounded-xl border border-[#27272a] overflow-hidden"
               style={{
@@ -1139,11 +1146,11 @@ const RecurringTransactions = () => {
                 </div>
               </div>
 
-              {/* Rows */}
               {filtered.map((item, idx) => (
                 <RecurringRow
                   key={item._id}
                   item={item}
+                  categories={categories}
                   idx={idx}
                   onEdit={handleEdit}
                   onDelete={setDeleteTarget}
@@ -1153,7 +1160,6 @@ const RecurringTransactions = () => {
               ))}
             </div>
 
-            {/* Footer tip */}
             <p className="text-center text-[11px] text-[#3f3f46] mt-5">
               Toggle the switch on any row to pause or resume auto-posting.
             </p>
@@ -1164,7 +1170,7 @@ const RecurringTransactions = () => {
       {/* ── Delete confirm ── */}
       {deleteTarget && (
         <DeleteConfirm
-          name={deleteTarget.title}
+          name={deleteTarget.title || "this transaction"}
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteTarget(null)}
         />
