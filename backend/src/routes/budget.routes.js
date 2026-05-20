@@ -1,7 +1,9 @@
+// backend/src/routes/budget.routes.js
 import express from "express";
 import {
   setBudget,
   getBudgetStatus,
+  getBudgets,
   deleteBudget,
 } from "../controllers/budgetController.js";
 
@@ -9,10 +11,11 @@ import { protect } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
-router.post("/", protect, setBudget);
+router.use(protect);
 
-router.get("/status", protect, getBudgetStatus);
-
-router.delete("/:id", protect, deleteBudget);
+router.post("/", setBudget);
+router.get("/", getBudgets); // list all budgets (optional ?month=&year=)
+router.get("/status", getBudgetStatus);
+router.delete("/:id", deleteBudget);
 
 export default router;
