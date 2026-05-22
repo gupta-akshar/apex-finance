@@ -1,4 +1,4 @@
-import bcrypt from "bcryptjs";
+import bcrypt from "bcryptjs"; // ← still needed for nothing; remove it
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import {
@@ -8,7 +8,6 @@ import {
 import Category from "../models/Category.js";
 
 // ================= REGISTER =================
-// @route   POST /api/auth/register
 export const registerUser = async (req, res, next) => {
   const defaultCategories = [
     { name: "Salary", type: "income" },
@@ -24,46 +23,26 @@ export const registerUser = async (req, res, next) => {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({
-        message: "All fields are required",
-      });
+      return res.status(400).json({ message: "All fields are required" });
     }
 
     const userExists = await User.findOne({ email });
-
     if (userExists) {
-      return res.status(400).json({
-        message: "User already exists",
-      });
+      return res.status(400).json({ message: "User already exists" });
     }
 
-    const salt = await bcrypt.genSalt(10);
+    // ── Plain password; the pre-save hook handles hashing ─────────────────
+    const user = await User.create({ name, email, password });
 
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    const user = await User.create({
-      name,
-      email,
-      password: hashedPassword,
-    });
-
-    // Create default categories
     await Category.insertMany(
-      defaultCategories.map((cat) => ({
-        ...cat,
-        user: user._id,
-      })),
+      defaultCategories.map((cat) => ({ ...cat, user: user._id })),
     );
 
-    // Generate tokens
     const accessToken = generateAccessToken(user._id);
-
     const refreshToken = generateRefreshToken(user._id);
 
-    // Save refresh token
     user.refreshToken = refreshToken;
-
-    await user.save();
+    await user.save(); // password not modified → hook skips re-hash
 
     const isProd = process.env.NODE_ENV === "production";
 
@@ -78,11 +57,7 @@ export const registerUser = async (req, res, next) => {
       .json({
         success: true,
         accessToken,
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-        },
+        user: { _id: user._id, name: user.name, email: user.email },
       });
   } catch (error) {
     next(error);
@@ -116,6 +91,7 @@ export const login = async (req, res, next) => {
 
     // Save refresh token
     user.refreshToken = refreshToken;
+    user.markModified("refreshToken");
 
     await user.save();
 
