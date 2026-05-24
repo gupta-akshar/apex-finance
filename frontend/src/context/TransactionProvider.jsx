@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { TransactionContext } from "./TransactionContext";
 import {
   getTransactions,
@@ -28,7 +28,6 @@ export const TransactionProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Pagination info returned from the backend
   const [pagination, setPagination] = useState({
     total: 0,
     page: 1,
@@ -36,24 +35,15 @@ export const TransactionProvider = ({ children }) => {
     limit: 10,
   });
 
-  // Centralized filter state
   const [filters, setFiltersState] = useState(DEFAULT_FILTERS);
 
-  // Keep a ref so fetchTransactions always closes over the latest filters
-  // without needing them as a dependency (avoids infinite loops)
-  const filtersRef = useRef(filters);
-  useEffect(() => {
-    filtersRef.current = filters;
-  }, [filters]);
-
   // ── Fetch ────────────────────────────────────────────────────────────────
-  const fetchTransactions = useCallback(async (overrideFilters) => {
+  const fetchTransactions = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const params = overrideFilters ?? filtersRef.current;
-      const data = await getTransactions(params);
+      const data = await getTransactions(filters);
 
       const raw = data.transactions || [];
       setTransactions(raw.map(normalizeTransaction));
@@ -66,21 +56,19 @@ export const TransactionProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, []); // stable — never recreated
+  }, [filters]);
 
   // ── Auto-refetch when filters change ─────────────────────────────────────
   useEffect(() => {
-    fetchTransactions(filters);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
+    fetchTransactions();
+  }, [fetchTransactions]);
 
-  // ── setFilters: update filters + reset page to 1 unless page itself changed
+  // ── setFilters ───────────────────────────────────────────────────────────
   const setFilters = useCallback((updater) => {
     setFiltersState((prev) => {
       const next =
         typeof updater === "function" ? updater(prev) : { ...prev, ...updater };
 
-      // If anything other than `page` changed, reset to page 1
       const changedKeys = Object.keys(next).filter((k) => next[k] !== prev[k]);
       const onlyPageChanged =
         changedKeys.length === 1 && changedKeys[0] === "page";
@@ -100,12 +88,12 @@ export const TransactionProvider = ({ children }) => {
   }, []);
 
   // ── ADD ──────────────────────────────────────────────────────────────────
+
   const addTransaction = useCallback(
     async (tx) => {
       try {
         const res = await createTransaction(tx);
         const newTx = res.transaction || res;
-        // Refetch to keep server-side sorted/paginated list in sync
         await fetchTransactions();
         return normalizeTransaction(newTx);
       } catch (err) {
@@ -121,9 +109,9 @@ export const TransactionProvider = ({ children }) => {
     async (id) => {
       try {
         await deleteTransaction(id);
-        // Optimistic local removal first
+
         setTransactions((prev) => prev.filter((t) => t._id !== id));
-        // Then refetch to fix pagination totals
+
         await fetchTransactions();
       } catch (err) {
         console.error("DELETE ERROR:", err);
@@ -134,6 +122,7 @@ export const TransactionProvider = ({ children }) => {
   );
 
   // ── EDIT ──────────────────────────────────────────────────────────────────
+
   const editTransaction = useCallback(async (id, updatedData) => {
     try {
       const res = await updateTransaction(id, updatedData);
