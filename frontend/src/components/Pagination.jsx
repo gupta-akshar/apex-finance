@@ -1,5 +1,5 @@
 import React from "react";
-import { useTransactions } from "../hooks/useTransaction";
+import { useTransactions } from "../hooks/useTransactions";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -72,7 +72,7 @@ const Pagination = () => {
         <div className="w-px h-4 bg-border mx-0.5" />
 
         {/* Page numbers */}
-        {buildPages().map((p, i) =>
+        {buildPages().map((p) =>
           typeof p === "string" ? (
             <span
               key={p}

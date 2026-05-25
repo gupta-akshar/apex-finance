@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTransactions } from "../hooks/useTransaction";
+import { useTransactions } from "../hooks/useTransactions";
 import { useAuth } from "../hooks/useAuth";
 import TransactionModal from "../components/TransactionModal";
 import SummaryCard from "../components/SummaryCard";

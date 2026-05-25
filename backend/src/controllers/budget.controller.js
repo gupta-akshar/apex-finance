@@ -1,4 +1,4 @@
-// backend/src/controllers/budgetController.js
+// backend/src/controllers/budget.controller.js
 import mongoose from "mongoose";
 import Budget from "../models/Budget.js";
 import Transaction from "../models/Transaction.js";

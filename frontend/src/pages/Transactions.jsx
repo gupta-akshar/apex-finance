@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { useTransactions } from "../hooks/useTransaction";
+import { useTransactions } from "../hooks/useTransactions";
 import TransactionsToolbar from "../components/TransactionsToolbar";
-import AdvancedFiltersPanel from "../components/AdvancedFiltersPanel";
+import TransactionFilters from "../components/TransactionFilters";
 import TransactionTable from "../components/TransactionTable";
 import Pagination from "../components/Pagination";
 
@@ -20,7 +20,7 @@ const Transactions = () => {
       />
 
       {/* ── Advanced Filters (collapsible, values preserved on close) ── */}
-      <AdvancedFiltersPanel isOpen={showAdvanced} />
+      <TransactionFilters isOpen={showAdvanced} />
 
       {/* ── Page body ── */}
       <div className="flex-1 px-6 py-5">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useTransactions } from "../hooks/useTransaction";
+import { useTransactions } from "../hooks/useTransactions";
 import { DEFAULT_FILTERS } from "../constants/transactionFilters.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

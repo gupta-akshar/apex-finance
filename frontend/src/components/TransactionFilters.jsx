@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from "react";
-import { useTransactions } from "../hooks/useTransaction";
+import React, { useEffect, useRef, useState } from "react";
+import { useTransactions } from "../hooks/useTransactions";
 import { getCategories } from "../api/categoryApi";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
@@ -19,218 +21,180 @@ const MONTHS = [
   { value: "12", label: "December" },
 ];
 
-const inputCls =
-  "bg-inputBg border border-border rounded-lg px-3 py-2 text-primaryText placeholder:text-secondaryText text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition w-full";
+const selectCls = [
+  "bg-inputBg border border-border rounded-lg px-3 py-1.5 text-sm",
+  "text-primaryText placeholder:text-secondaryText",
+  "focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition w-full",
+].join(" ");
 
-const labelCls = "block text-xs text-secondaryText mb-1 font-medium";
+const labelCls =
+  "block text-[11px] font-semibold uppercase tracking-wider text-secondaryText/70 mb-1";
 
-const TransactionFilters = () => {
-  const { filters, setFilters, resetFilters } = useTransactions();
+// ─── Component ────────────────────────────────────────────────────────────────
+const TransactionFilters = ({ isOpen }) => {
+  const { filters, setFilters } = useTransactions();
   const [categories, setCategories] = useState([]);
+  const contentRef = useRef(null);
+  const [contentHeight, setContentHeight] = useState(0);
 
-  // Local search value so we debounce it before sending to context
-  const [searchInput, setSearchInput] = useState(filters.search || "");
+  // Measure real content height so the transition is exact
+  useEffect(() => {
+    if (!contentRef.current) return;
+    const ro = new ResizeObserver(() => {
+      setContentHeight(contentRef.current?.scrollHeight ?? 0);
+    });
+    ro.observe(contentRef.current);
+    // Initial measurement
+    setContentHeight(contentRef.current.scrollHeight);
+    return () => ro.disconnect();
+  }, []);
 
+  // Load categories once
   useEffect(() => {
     getCategories()
       .then(setCategories)
-      .catch((err) => console.error("Categories load error:", err));
+      .catch((err) => console.error("Category load error:", err));
   }, []);
-
-  // Debounce search: wait 400ms after the user stops typing
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchInput !== filters.search) {
-        setFilters({ search: searchInput });
-      }
-    }, 400);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput]);
-
-  const handleChange = (field) => (e) => {
-    const value = e.target.value;
-
-    // When type changes, clear category so stale cross-type category isn't sent
-    if (field === "type") {
-      setFilters({ type: value, category: "" });
-      return;
-    }
-
-    // Month / year are linked — clearing one should not leave orphaned filter
-    if (field === "month" && !value) {
-      setFilters({ month: "", year: "" });
-      return;
-    }
-
-    // Switching to date-range mode clears month/year and vice-versa
-    if (field === "startDate" || field === "endDate") {
-      setFilters({ [field]: value, month: "", year: "" });
-      return;
-    }
-    if (field === "month" || field === "year") {
-      setFilters({ [field]: value, startDate: "", endDate: "" });
-      return;
-    }
-
-    setFilters({ [field]: value });
-  };
 
   const filteredCategories = filters.type
     ? categories.filter((c) => c.type === filters.type)
     : categories;
 
-  const hasActiveFilters =
-    filters.type ||
-    filters.category ||
-    filters.startDate ||
-    filters.endDate ||
-    filters.month ||
-    filters.year ||
-    filters.search ||
-    filters.sort !== "latest";
+  // ── Change handlers ──────────────────────────────────────────────────────
+
+  const handleChange = (field) => (e) => {
+    const value = e.target.value;
+
+    // Month/year and date-range are mutually exclusive
+    if (field === "startDate" || field === "endDate") {
+      setFilters({ [field]: value, month: "", year: "" });
+    } else if (field === "month" || field === "year") {
+      setFilters({ [field]: value, startDate: "", endDate: "" });
+    } else {
+      setFilters({ [field]: value });
+    }
+  };
+
+  const dateRangeActive = Boolean(filters.startDate || filters.endDate);
+  const monthYearActive = Boolean(filters.month || filters.year);
+
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 mb-6 space-y-4">
-      {/* Row 1: Search + Sort */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Search */}
-        <div>
-          <label className={labelCls}>Search</label>
-          <input
-            type="text"
-            placeholder="Search by category or note…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className={inputCls}
-          />
-        </div>
+    <div
+      className="overflow-hidden transition-all duration-300 ease-in-out"
+      style={{ maxHeight: isOpen ? `${contentHeight}px` : "0px" }}
+      aria-hidden={!isOpen}
+    >
+      {/* Inner content — measured by ResizeObserver */}
+      <div ref={contentRef}>
+        <div className="px-6 pt-3 pb-5 border-b border-border bg-card/40">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {/* Category */}
+            <div>
+              <label className={labelCls}>Category</label>
+              <select
+                value={filters.category}
+                onChange={handleChange("category")}
+                className={selectCls}
+              >
+                <option value="">All</option>
+                {filteredCategories.map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        {/* Sort */}
-        <div>
-          <label className={labelCls}>Sort By</label>
-          <select
-            value={filters.sort}
-            onChange={handleChange("sort")}
-            className={inputCls}
-          >
-            <option value="latest">Latest First</option>
-            <option value="oldest">Oldest First</option>
-            <option value="highest">Highest Amount</option>
-            <option value="lowest">Lowest Amount</option>
-          </select>
-        </div>
+            {/* Month */}
+            <div>
+              <label
+                className={`${labelCls} ${dateRangeActive ? "opacity-40" : ""}`}
+              >
+                Month
+              </label>
+              <select
+                value={filters.month}
+                onChange={handleChange("month")}
+                disabled={dateRangeActive}
+                className={`${selectCls} ${dateRangeActive ? "opacity-40 cursor-not-allowed" : ""}`}
+              >
+                <option value="">All</option>
+                {MONTHS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        {/* Type */}
-        <div>
-          <label className={labelCls}>Type</label>
-          <select
-            value={filters.type}
-            onChange={handleChange("type")}
-            className={inputCls}
-          >
-            <option value="">All Types</option>
-            <option value="income">Income</option>
-            <option value="expense">Expense</option>
-          </select>
+            {/* Year */}
+            <div>
+              <label
+                className={`${labelCls} ${dateRangeActive ? "opacity-40" : ""}`}
+              >
+                Year
+              </label>
+              <select
+                value={filters.year}
+                onChange={handleChange("year")}
+                disabled={dateRangeActive}
+                className={`${selectCls} ${dateRangeActive ? "opacity-40 cursor-not-allowed" : ""}`}
+              >
+                <option value="">All</option>
+                {YEARS.map((y) => (
+                  <option key={y} value={String(y)}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Start Date */}
+            <div>
+              <label
+                className={`${labelCls} ${monthYearActive ? "opacity-40" : ""}`}
+              >
+                From
+              </label>
+              <input
+                type="date"
+                value={filters.startDate}
+                onChange={handleChange("startDate")}
+                disabled={monthYearActive}
+                className={`${selectCls} ${monthYearActive ? "opacity-40 cursor-not-allowed" : ""}`}
+              />
+            </div>
+
+            {/* End Date */}
+            <div>
+              <label
+                className={`${labelCls} ${monthYearActive ? "opacity-40" : ""}`}
+              >
+                To
+              </label>
+              <input
+                type="date"
+                value={filters.endDate}
+                min={filters.startDate || undefined}
+                onChange={handleChange("endDate")}
+                disabled={monthYearActive}
+                className={`${selectCls} ${monthYearActive ? "opacity-40 cursor-not-allowed" : ""}`}
+              />
+            </div>
+          </div>
+
+          {/* Mutual exclusion hint */}
+          {(dateRangeActive || monthYearActive) && (
+            <p className="mt-2 text-[11px] text-secondaryText/60">
+              {dateRangeActive
+                ? "Month & Year filters are disabled while a date range is active."
+                : "Date range filters are disabled while Month/Year is active."}
+            </p>
+          )}
         </div>
       </div>
-
-      {/* Row 2: Category + Month + Year */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Category */}
-        <div>
-          <label className={labelCls}>Category</label>
-          <select
-            value={filters.category}
-            onChange={handleChange("category")}
-            className={inputCls}
-          >
-            <option value="">All Categories</option>
-            {filteredCategories.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Month */}
-        <div>
-          <label className={labelCls}>Month</label>
-          <select
-            value={filters.month}
-            onChange={handleChange("month")}
-            className={inputCls}
-            disabled={Boolean(filters.startDate || filters.endDate)}
-          >
-            <option value="">All Months</option>
-            {MONTHS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Year */}
-        <div>
-          <label className={labelCls}>Year</label>
-          <select
-            value={filters.year}
-            onChange={handleChange("year")}
-            className={inputCls}
-            disabled={Boolean(filters.startDate || filters.endDate)}
-          >
-            <option value="">All Years</option>
-            {YEARS.map((y) => (
-              <option key={y} value={String(y)}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Row 3: Date Range */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>Start Date</label>
-          <input
-            type="date"
-            value={filters.startDate}
-            onChange={handleChange("startDate")}
-            className={inputCls}
-            disabled={Boolean(filters.month || filters.year)}
-          />
-        </div>
-        <div>
-          <label className={labelCls}>End Date</label>
-          <input
-            type="date"
-            value={filters.endDate}
-            min={filters.startDate || undefined}
-            onChange={handleChange("endDate")}
-            className={inputCls}
-            disabled={Boolean(filters.month || filters.year)}
-          />
-        </div>
-      </div>
-
-      {/* Reset */}
-      {hasActiveFilters && (
-        <div className="flex justify-end">
-          <button
-            onClick={() => {
-              setSearchInput("");
-              resetFilters();
-            }}
-            className="text-sm text-accent hover:text-accentHover transition underline"
-          >
-            Clear all filters
-          </button>
-        </div>
-      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { getCategories } from "../api/categoryApi";
-import { useTransactions } from "../hooks/useTransaction";
+import { useTransactions } from "../hooks/useTransactions";
 
 // transaction prop is passed when editing an existing transaction, null when adding new
 const TransactionModal = ({ mode, onClose, transaction = null }) => {
