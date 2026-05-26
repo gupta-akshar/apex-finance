@@ -1,4 +1,6 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
+
 import {
   registerUser,
   login,
@@ -13,17 +15,30 @@ import { registerSchema, loginSchema } from "../validators/auth.validator.js";
 
 const router = express.Router();
 
-import rateLimit from "express-rate-limit";
-
+// ─── Rate limiters ────────────────────────────────────────────────────────────
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: Number(process.env.RATE_LIMIT_LOGIN_MAX) || 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many login attempts. Please try again in 15 minutes.",
+  },
 });
 
 const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 3,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: Number(process.env.RATE_LIMIT_REGISTER_MAX) || 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many accounts created from this IP. Please try again later.",
+  },
 });
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
 
 // Register
 router.post(
