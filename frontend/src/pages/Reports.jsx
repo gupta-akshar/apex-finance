@@ -255,15 +255,15 @@ const Reports = () => {
   /* ── Toolbar state ── */
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(String(currentYear));
-  // month is a JS month index string ("0"–"11") or "" for full-year
-  const [month, setMonth] = useState("");
+
+  const [monthIdx, setMonthIdx] = useState("");
 
   const yearOptions = useMemo(
     () => Array.from({ length: 5 }, (_, i) => String(currentYear - 2 + i)),
     [currentYear],
   );
 
-  /* ── Analytics data from backend ── */
+  /* ── Analytics data — monthIdx is passed as-is; useAnalytics owns the +1 ── */
   const {
     monthlyBuckets,
     stats,
@@ -273,13 +273,13 @@ const Reports = () => {
     loading,
     error,
     refresh,
-  } = useAnalytics(year, month);
+  } = useAnalytics(year, monthIdx);
 
   /* ── Derived flags ── */
   const hasMonthly = monthlyBuckets.some((b) => b.income > 0 || b.expense > 0);
   const hasExpenses = expenseCategories.length > 0;
   const hasData = stats.income > 0 || stats.expense > 0;
-  const isFullYear = month === "";
+  const isFullYear = monthIdx === "";
 
   /* ── Savings rate ── */
   const savingsRate = pct(stats.balance, stats.income);
@@ -287,7 +287,7 @@ const Reports = () => {
   /* ── Selected month label for display ── */
   const periodLabel = isFullYear
     ? `Full year ${year}`
-    : `${MONTH_LABELS[Number(month)]} ${year}`;
+    : `${MONTH_LABELS[Number(monthIdx)]} ${year}`;
 
   /* ── Loading skeleton ── */
   if (loading) {
@@ -345,7 +345,7 @@ const Reports = () => {
             value={year}
             onChange={(e) => {
               setYear(e.target.value);
-              setMonth("");
+              setMonthIdx(""); // reset to full-year when year changes
             }}
             className={[
               "bg-[#0f0f11] border border-[#27272a] rounded-lg px-3 py-1.5",
@@ -361,13 +361,13 @@ const Reports = () => {
             ))}
           </select>
 
-          {/* Month chips */}
+          {/* Month chips — clicking "Jan" sets monthIdx = "0" (JS 0-based) */}
           <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
             <button
-              onClick={() => setMonth("")}
+              onClick={() => setMonthIdx("")}
               className={[
                 "px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 border transition-all",
-                month === ""
+                monthIdx === ""
                   ? "bg-[#6366f1]/15 border-[#6366f1]/40 text-[#a5b4fc]"
                   : "border-[#27272a] text-[#71717a] hover:text-[#a1a1aa] hover:border-[#3f3f46]",
               ].join(" ")}
@@ -377,10 +377,10 @@ const Reports = () => {
             {MONTH_LABELS.map((label, i) => (
               <button
                 key={i}
-                onClick={() => setMonth(String(i))}
+                onClick={() => setMonthIdx(String(i))} // store 0-based index
                 className={[
                   "px-2.5 py-1.5 rounded-lg text-xs font-medium shrink-0 border transition-all",
-                  String(i) === month
+                  String(i) === monthIdx
                     ? "bg-[#6366f1]/15 border-[#6366f1]/40 text-[#a5b4fc]"
                     : "border-[#27272a] text-[#71717a] hover:text-[#a1a1aa] hover:border-[#3f3f46]",
                 ].join(" ")}
@@ -631,7 +631,6 @@ const Reports = () => {
 
             {/* ── Two-column: Expense Pie + Income Pie ── */}
             <div className="grid md:grid-cols-2 gap-5">
-              {/* Expense breakdown */}
               <ChartPanel
                 title="Expenses by Category"
                 subtitle="Where your money went"
@@ -675,7 +674,6 @@ const Reports = () => {
                 )}
               </ChartPanel>
 
-              {/* Income breakdown */}
               <ChartPanel
                 title="Income by Source"
                 subtitle="Where your money came from"
@@ -769,7 +767,6 @@ const Reports = () => {
                       idx % 2 !== 0 ? "bg-white/[0.01]" : "",
                     ].join(" ")}
                   >
-                    {/* Name + dot */}
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span
                         className="w-2 h-2 rounded-full shrink-0"
@@ -782,24 +779,18 @@ const Reports = () => {
                         {cat.category}
                       </span>
                     </div>
-
-                    {/* Amount */}
                     <span
                       className="text-sm font-semibold tabular-nums text-[#f87171]"
                       style={{ fontFamily: "'JetBrains Mono', monospace" }}
                     >
                       {inrFmt(cat.total)}
                     </span>
-
-                    {/* Share */}
                     <span
                       className="text-[11px] tabular-nums text-[#71717a] w-10 text-right"
                       style={{ fontFamily: "'JetBrains Mono', monospace" }}
                     >
                       {sharePct}%
                     </span>
-
-                    {/* Progress bar */}
                     <div className="w-24 hidden sm:block">
                       <div className="h-1.5 rounded-full bg-[#27272a] overflow-hidden">
                         <div
@@ -898,7 +889,7 @@ const Reports = () => {
               style={{ fontFamily: "'Sora', sans-serif" }}
             >
               No transactions for{" "}
-              {!isFullYear ? `${MONTH_LABELS[Number(month)]} ` : ""}
+              {!isFullYear ? `${MONTH_LABELS[Number(monthIdx)]} ` : ""}
               {year}
             </p>
             <p
@@ -909,7 +900,7 @@ const Reports = () => {
             </p>
             {!isFullYear && (
               <button
-                onClick={() => setMonth("")}
+                onClick={() => setMonthIdx("")}
                 className="text-xs text-[#6366f1] hover:text-[#818cf8] transition-colors mt-1"
               >
                 View full year →
