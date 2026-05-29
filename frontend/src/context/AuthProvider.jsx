@@ -21,7 +21,6 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // ─── Listen for forced logout from axios interceptor ────────────────────
-
   useEffect(() => {
     const handleForcedLogout = () => {
       setUser(null);

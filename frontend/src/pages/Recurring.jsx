@@ -79,6 +79,33 @@ const toMonthly = (amount, frequency) => {
   }
 };
 
+const computeNextDate = (item) => {
+  const base = new Date(item.lastExecuted ?? item.startDate);
+  // Work in UTC-midnight to stay timezone-safe
+  const d = new Date(
+    Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()),
+  );
+
+  switch (item.frequency) {
+    case "daily":
+      d.setUTCDate(d.getUTCDate() + 1);
+      break;
+    case "weekly":
+      d.setUTCDate(d.getUTCDate() + 7);
+      break;
+    case "monthly":
+      d.setUTCMonth(d.getUTCMonth() + 1);
+      break;
+    case "yearly":
+      d.setUTCFullYear(d.getUTCFullYear() + 1);
+      break;
+    default:
+      break;
+  }
+
+  return d.toISOString();
+};
+
 const fmtDate = (d) =>
   d
     ? new Date(d).toLocaleDateString("en-IN", {
@@ -482,7 +509,7 @@ const RecurringRow = ({
   const [hovered, setHovered] = useState(false);
   const isIncome = item.type === "income";
   const tc = TYPE_COLORS[item.type];
-  const nextLabel = countdown(item.nextDate);
+  const nextLabel = countdown(computeNextDate(item));
   const isOverdue = nextLabel === "Overdue";
   const isToday = nextLabel === "Today";
 
