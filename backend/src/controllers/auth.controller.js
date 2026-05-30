@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs"; // ← still needed for nothing; remove it
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import {

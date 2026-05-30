@@ -1,9 +1,11 @@
 import app from "./app.js";
 import { loadEnv } from "./config/env.js";
+import { validateEnv } from "./config/validateEnv.js";
 import { connectDB } from "./config/db.js";
 import { startRecurringJob } from "./jobs/recurring.job.js";
 
 loadEnv();
+validateEnv();
 
 const PORT = process.env.PORT || 5000;
 
