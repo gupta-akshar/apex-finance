@@ -147,13 +147,27 @@ export const refreshAccessToken = async (req, res) => {
     }
 
     const newAccessToken = generateAccessToken(user._id);
+    const newRefreshToken = generateRefreshToken(user._id);
+
+    user.refreshToken = newRefreshToken;
+    await user.save();
+
+    const isProd = process.env.NODE_ENV === "production";
 
     res.set("Cache-Control", "no-store");
 
-    res.status(200).json({
-      success: true,
-      accessToken: newAccessToken,
-    });
+    res
+      .cookie("refreshToken", newRefreshToken, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      })
+      .status(200)
+      .json({
+        success: true,
+        accessToken: newAccessToken,
+      });
   } catch (error) {
     if (error.name === "TokenExpiredError") {
       return res.status(401).json({
