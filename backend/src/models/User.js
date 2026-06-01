@@ -49,15 +49,14 @@ const userSchema = new mongoose.Schema(
 );
 
 // ─── Hash password before every save ─────────────────────────────────────────
-// Only runs when the password field has actually been modified.
-// This prevents double-hashing when other fields (e.g. refreshToken) are saved.
-// backend/src/models/User.js  — replace the pre-save hook
+userSchema.index({ refreshToken: 1 }, { sparse: true });
 
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
-  this.password = await bcrypt.hash(this.password, 10);
-  // If bcrypt throws, Mongoose catches the rejected Promise automatically
-  // and aborts the save — no manual next() needed
+  this.password = await bcrypt.hash(
+    this.password,
+    Number(process.env.BCRYPT_ROUNDS) || 10,
+  );
 });
 
 userSchema.methods.comparePassword = async function (enteredPassword) {
