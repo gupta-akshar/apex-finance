@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import API from "../api/axios";
+import API, { setAccessToken, clearAccessToken } from "../api/axios";
 import { AuthContext } from "./AuthContext";
 
 export const AuthProvider = ({ children }) => {
@@ -41,8 +41,8 @@ export const AuthProvider = ({ children }) => {
     const res = await API.post("/auth/login", { email, password });
     const { accessToken, user: userData } = res.data;
 
-    localStorage.setItem("accessToken", accessToken);
-
+    // Store only in memory — no localStorage
+    setAccessToken(accessToken);
     API.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
 
     setUser(userData);
@@ -55,7 +55,8 @@ export const AuthProvider = ({ children }) => {
     const res = await API.post("/auth/register", { name, email, password });
     const { accessToken, user: userData } = res.data;
 
-    localStorage.setItem("accessToken", accessToken);
+    // Store only in memory — no localStorage
+    setAccessToken(accessToken);
     API.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
 
     setUser(userData);
@@ -70,7 +71,7 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       console.error("Logout API error:", err);
     } finally {
-      localStorage.removeItem("accessToken");
+      clearAccessToken();
       delete API.defaults.headers.common["Authorization"];
       setUser(null);
       navigate("/login");
