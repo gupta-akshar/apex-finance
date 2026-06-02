@@ -1,5 +1,10 @@
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
+import mongoose from "mongoose";
+import Transaction from "../models/Transaction.js";
+import Category from "../models/Category.js";
+import Budget from "../models/Budget.js";
+import RecurringTransaction from "../models/RecurringTransaction.js";
 
 // @route   GET /api/users/profile
 // @access  Private
@@ -71,11 +76,35 @@ export const changePassword = async (req, res, next) => {
 // @route   DELETE /api/users
 // @access  Private
 export const deleteAccount = async (req, res, next) => {
-  try {
-    await User.findByIdAndDelete(req.user._id);
+  const session = await mongoose.startSession();
 
-    res.status(200).json({ message: "Account deleted successfully" });
+  try {
+    session.startTransaction();
+
+    const userId = req.user._id;
+
+    await Transaction.deleteMany({ user: userId }, { session });
+    await Category.deleteMany({ user: userId }, { session });
+    await Budget.deleteMany({ user: userId }, { session });
+    await RecurringTransaction.deleteMany({ user: userId }, { session });
+    await User.findByIdAndDelete(userId, { session });
+
+    await session.commitTransaction();
+
+    const isProd = process.env.NODE_ENV === "production";
+
+    res
+      .clearCookie("refreshToken", {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
+      })
+      .status(200)
+      .json({ message: "Account deleted successfully" });
   } catch (error) {
+    await session.abortTransaction();
     next(error);
+  } finally {
+    await session.endSession();
   }
 };
