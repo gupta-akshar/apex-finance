@@ -8,7 +8,6 @@ const recurringTransactionSchema = new mongoose.Schema(
       required: true,
     },
 
-    // ── Human-readable label (e.g. "Netflix", "Salary") ─────────────────────
     title: {
       type: String,
       trim: true,
@@ -28,16 +27,12 @@ const recurringTransactionSchema = new mongoose.Schema(
       min: 0.01,
     },
 
-    // Stored as ObjectId but legacy docs may have a plain String.
-    // We use Mixed so the collection stays backward-compatible while new
-    // writes always store an ObjectId ref (frontend sends the _id string,
-    // Mongoose auto-casts it).
     category: {
-      type: mongoose.Schema.Types.Mixed,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
       required: true,
     },
 
-    // ── "yearly" added; keeps backward-compat with existing docs ────────────
     frequency: {
       type: String,
       enum: ["daily", "weekly", "monthly", "yearly"],
@@ -49,13 +44,11 @@ const recurringTransactionSchema = new mongoose.Schema(
       required: true,
     },
 
-    // ── Optional end date — stop auto-posting after this date ───────────────
     endDate: {
       type: Date,
       default: null,
     },
 
-    // ── Optional memo / description ──────────────────────────────────────────
     note: {
       type: String,
       trim: true,
@@ -68,9 +61,6 @@ const recurringTransactionSchema = new mongoose.Schema(
       default: null,
     },
 
-    // ── Canonical active-state field — "isActive" everywhere ────────────────
-    // (was the only correct field in the old schema; keeping it avoids a
-    //  migration for the isActive column that already exists in the DB)
     isActive: {
       type: Boolean,
       default: true,
