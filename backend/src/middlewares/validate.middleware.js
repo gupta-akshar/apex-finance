@@ -15,8 +15,7 @@ export const validate =
 
     const { error } = schema.validate(data, {
       abortEarly: false,
-      // Allow unknown keys so extra query params (e.g. pagination tokens) pass through
-      allowUnknown: false,
+      allowUnknown: source === "query",
     });
 
     if (error) {
