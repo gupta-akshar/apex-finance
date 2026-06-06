@@ -4,13 +4,12 @@ import Transaction from "../models/Transaction.js";
 // ─── Utility ──────────────────────────────────────────────────────────────────
 
 const getMonthDateRange = (month, year) => {
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0, 23, 59, 59);
+  const startDate = new Date(Date.UTC(year, month - 1, 1));
+  const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
   return { startDate, endDate };
 };
 
 // ─── 1. Monthly Summary ───────────────────────────────────────────────────────
-// Returns income, expense, balance for a single calendar month.
 
 export const getMonthlySummaryService = async (userId, month, year) => {
   const { startDate, endDate } = getMonthDateRange(month, year);
@@ -42,8 +41,6 @@ export const getMonthlySummaryService = async (userId, month, year) => {
 };
 
 // ─── 2. Category Breakdown ────────────────────────────────────────────────────
-// Returns totals grouped by category NAME (via $lookup).
-// Filters by type (required), and optionally by month+year or year alone.
 
 export const getCategoryBreakdownService = async (
   userId,
@@ -61,8 +58,8 @@ export const getCategoryBreakdownService = async (
     matchStage.date = { $gte: startDate, $lte: endDate };
   } else if (year) {
     matchStage.date = {
-      $gte: new Date(year, 0, 1),
-      $lte: new Date(year, 11, 31, 23, 59, 59),
+      $gte: new Date(Date.UTC(year, 0, 1)),
+      $lte: new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999)),
     };
   }
 
@@ -77,8 +74,6 @@ export const getCategoryBreakdownService = async (
       },
     },
     {
-      // FIX: was "preserveNullAndEmpty" (unknown option → MongoServerError on
-      // MongoDB 5+).  Correct field name is "preserveNullAndEmptyArrays".
       $unwind: {
         path: "$categoryDoc",
         preserveNullAndEmptyArrays: true,
@@ -105,7 +100,6 @@ export const getCategoryBreakdownService = async (
 };
 
 // ─── 3. Overview ──────────────────────────────────────────────────────────────
-// All-time totals across every transaction for this user.
 
 export const getOverviewService = async (userId) => {
   const result = await Transaction.aggregate([
@@ -141,11 +135,10 @@ export const getOverviewService = async (userId) => {
 };
 
 // ─── 4. Monthly Trend ─────────────────────────────────────────────────────────
-// Returns per-month income AND expense totals for every month in the given year.
 
 export const getMonthlyTrendService = async (userId, year) => {
-  const startDate = new Date(year, 0, 1);
-  const endDate = new Date(year, 11, 31, 23, 59, 59);
+  const startDate = new Date(Date.UTC(year, 0, 1));
+  const endDate = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
 
   return await Transaction.aggregate([
     {

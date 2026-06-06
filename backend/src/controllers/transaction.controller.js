@@ -38,20 +38,17 @@ const buildFilter = (userId, query) => {
     const m = Number(month);
     const y = Number(year);
     filter.date = {
-      $gte: new Date(y, m - 1, 1),
-      $lte: new Date(y, m, 0, 23, 59, 59, 999),
+      $gte: new Date(Date.UTC(y, m - 1, 1)),
+      $lte: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)),
     };
   } else if (year) {
     // Yearly filter
     const y = Number(year);
     filter.date = {
-      $gte: new Date(y, 0, 1),
-      $lte: new Date(y, 11, 31, 23, 59, 59, 999),
+      $gte: new Date(Date.UTC(y, 0, 1)),
+      $lte: new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999)),
     };
   }
-
-  // search: matched against populated category name or note (done via aggregation — see below)
-  // We'll handle text search at the aggregation stage, not here.
 
   return filter;
 };
@@ -100,8 +97,8 @@ export const createTransaction = async (req, res, next) => {
       });
 
       if (budget) {
-        const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 1);
+        const startDate = new Date(Date.UTC(year, month - 1, 1));
+        const endDate = new Date(Date.UTC(year, month, 1));
 
         const result = await Transaction.aggregate([
           {
