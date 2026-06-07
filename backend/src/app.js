@@ -14,6 +14,17 @@ import categoryRoutes from "./routes/category.routes.js";
 
 import { notFound, errorHandler } from "./middlewares/error.middleware.js";
 
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many requests, please try again after 15 minutes.",
+  },
+});
+
 const app = express();
 
 app.set("etag", false);
@@ -40,6 +51,7 @@ app.use((req, res, next) => {
 });
 
 // Routes
+app.use("/api", apiLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/users", userRoutes);
