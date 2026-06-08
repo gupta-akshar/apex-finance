@@ -132,7 +132,7 @@ export const refreshAccessToken = async (req, res) => {
 
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).select("+refreshToken");
 
     if (!user) {
       return res.status(403).json({
@@ -188,7 +188,7 @@ export const logout = async (req, res, next) => {
     const refreshToken = req.cookies.refreshToken;
 
     if (refreshToken) {
-      const user = await User.findOne({ refreshToken });
+      const user = await User.findOne({ refreshToken }).select("+refreshToken");
 
       if (user) {
         user.refreshToken = null;
