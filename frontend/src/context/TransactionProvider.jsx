@@ -95,7 +95,11 @@ export const TransactionProvider = ({ children }) => {
         const res = await createTransaction(tx);
         const newTx = res.transaction || res;
         await fetchTransactions();
-        return normalizeTransaction(newTx);
+        return {
+          transaction: normalizeTransaction(newTx),
+          budgetWarning: res.budgetWarning ?? false,
+          warningMessage: res.warningMessage ?? "",
+        };
       } catch (err) {
         console.error("ADD ERROR:", err);
         throw err;

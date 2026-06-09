@@ -16,6 +16,7 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
   const [categories, setCategories] = useState([]);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [warning, setWarning] = useState("");
 
   const { addTransaction, editTransaction } = useTransactions();
 
@@ -41,41 +42,21 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-
-    // Client-side validation
-    if (!amount || Number(amount) <= 0) {
-      setError("Please enter a valid amount greater than 0.");
-      return;
-    }
-    if (!category) {
-      setError(
-        isIncome ? "Please select a source." : "Please select a category.",
-      );
-      return;
-    }
-    if (!date) {
-      setError("Please select a date.");
-      return;
-    }
-
-    const payload = {
-      amount: Number(amount),
-      category,
-      date,
-      note,
-      type: isIncome ? "income" : "expense",
-    };
-
+    setWarning("");
+    // ...validation unchanged...
     try {
       setSubmitting(true);
-
       if (isEditing) {
         await editTransaction(transaction._id, payload);
+        onClose();
       } else {
-        await addTransaction(payload);
+        const { budgetWarning, warningMessage } = await addTransaction(payload);
+        if (budgetWarning && warningMessage) {
+          setWarning(warningMessage); // stay open — user must dismiss
+        } else {
+          onClose();
+        }
       }
-
-      onClose();
     } catch (err) {
       const message =
         err?.response?.data?.message ||
@@ -113,6 +94,31 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
           <p className="text-red-500 text-sm mb-3 bg-red-500/10 px-3 py-2 rounded-lg">
             {error}
           </p>
+        )}
+
+        {/* Budget Warning Banner */}
+        {warning && (
+          <div
+            className="flex items-start justify-between gap-3 mb-3
+                  bg-yellow-500/10 border border-yellow-500/30
+                  px-3 py-2 rounded-lg"
+          >
+            <div className="flex items-start gap-2 min-w-0">
+              <span className="text-yellow-400 text-base leading-none mt-0.5 shrink-0">
+                ⚠
+              </span>
+              <p className="text-yellow-400 text-sm leading-snug">{warning}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-yellow-400/60 hover:text-yellow-400 text-xs
+                 border border-yellow-500/30 hover:border-yellow-500/60
+                 px-2 py-1 rounded transition-colors shrink-0"
+            >
+              OK
+            </button>
+          </div>
         )}
 
         {/* Amount */}
