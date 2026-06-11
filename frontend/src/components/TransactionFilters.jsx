@@ -51,9 +51,27 @@ const TransactionFilters = ({ isOpen }) => {
 
   // Load categories once
   useEffect(() => {
-    getCategories()
-      .then(setCategories)
-      .catch((err) => console.error("Category load error:", err));
+    const controller = new AbortController();
+    let cancelled = false;
+
+    getCategories({ signal: controller.signal })
+      .then((data) => {
+        if (!cancelled) setCategories(data);
+      })
+      .catch((err) => {
+        if (
+          !cancelled &&
+          err.name !== "CanceledError" &&
+          err.name !== "AbortError"
+        ) {
+          console.error("Category load error:", err);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, []);
 
   const filteredCategories = filters.type

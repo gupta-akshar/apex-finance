@@ -174,11 +174,15 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // ── Recent transactions only — NOT used for any aggregation ──────────────
-  // We keep page=1 / limit=5 in context so the recent-activity panel always
-  // shows the five latest entries without any extra request.
-  const { transactions: recentTransactions, loading: recentLoading } =
-    useTransactions();
+  const {
+    transactions: recentTransactions,
+    loading: recentLoading,
+    resetFilters,
+  } = useTransactions();
+
+  useEffect(() => {
+    resetFilters();
+  }, [resetFilters]);
 
   // Slice to 5 regardless of whatever limit the context currently uses
   const recentTx = useMemo(
@@ -187,8 +191,7 @@ const Dashboard = () => {
   );
 
   // ── Server-driven analytics ───────────────────────────────────────────────
-  // All numbers for stats cards and charts come from the analytics API.
-  // These are independent of the paginated transaction context.
+
   const {
     stats,
     monthlyData,
@@ -198,17 +201,15 @@ const Dashboard = () => {
     refresh: refreshAnalytics,
   } = useDashboardAnalytics();
 
-  const [modalMode, setModalMode] = useState(null); // "income" | "expense" | null
+  const [modalMode, setModalMode] = useState(null);
 
-  // Re-fetch analytics after a transaction is added so charts update immediately
   const handleModalClose = () => {
     setModalMode(null);
     refreshAnalytics();
   };
 
   // ── Combined loading state for the initial skeleton ───────────────────────
-  // Show skeleton only on the very first load; subsequent re-fetches (e.g.
-  // after adding a transaction) show inline spinners instead.
+
   const isFirstLoad = analyticsLoading && stats.transactionsCount === 0;
 
   if (isFirstLoad) {

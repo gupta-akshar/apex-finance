@@ -1,8 +1,8 @@
 import API from "./axios";
 
 // Fetch all categories
-export const getCategories = async () => {
-  const res = await API.get("/categories");
+export const getCategories = async ({ signal } = {}) => {
+  const res = await API.get("/categories", { signal });
   return res.data;
 };
 

@@ -71,7 +71,7 @@ const toMonthly = (amount, frequency) => {
     case "daily":
       return a * 30;
     case "weekly":
-      return a * 4.33;
+      return (a * 52) / 12;
     case "yearly":
       return a / 12;
     default:
