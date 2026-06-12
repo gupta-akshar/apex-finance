@@ -44,4 +44,7 @@ budgetSchema.index(
   { unique: true },
 );
 
+// ADD: supports getBudgets() queries filtered by user+month+year without category
+budgetSchema.index({ user: 1, month: 1, year: 1 });
+
 export default mongoose.model("Budget", budgetSchema);

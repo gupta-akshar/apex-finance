@@ -2,12 +2,6 @@ import RecurringTransaction from "../models/RecurringTransaction.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Pick only the fields the schema accepts.
- * This is the single source of truth for which body keys we write to the DB.
- * Any extra keys the client sends are silently ignored here (rather than
- * relying on Mongoose strict-mode to drop them after the fact).
- */
 const pickFields = (body) => {
   const {
     title,
@@ -35,9 +29,6 @@ const pickFields = (body) => {
   if (endDate !== undefined) doc.endDate = endDate || null;
   if (note !== undefined) doc.note = note ?? "";
 
-  // Canonical active-state field
-  // Accept both "isActive" and the old accidental "active" key so old
-  // clients (or cached frontend bundles) still work during a deploy window.
   if (isActive !== undefined) doc.isActive = Boolean(isActive);
   else if (body.active !== undefined) doc.isActive = Boolean(body.active);
 
@@ -82,7 +73,9 @@ export const getRecurringTransactions = async (req, res, next) => {
   try {
     const recurring = await RecurringTransaction.find({
       user: req.user._id,
-    }).sort({ createdAt: -1 });
+    })
+      .sort({ createdAt: -1 })
+      .limit(500);
 
     res.json(recurring);
   } catch (error) {
