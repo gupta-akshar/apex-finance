@@ -7,20 +7,8 @@ import {
   toggleRecurringTransaction,
 } from "../api/recurringApi";
 import { getCategories } from "../api/categoryApi";
-
-/* ─── Font injection ─────────────────────────────────────────────────────── */
-const FONT_HREF =
-  "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@300;400;500;600&display=swap";
-
-function useFonts() {
-  useEffect(() => {
-    if (document.querySelector(`link[href="${FONT_HREF}"]`)) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = FONT_HREF;
-    document.head.appendChild(link);
-  }, []);
-}
+import useFonts from "../hooks/useFonts";
+import { TYPE_COLORS } from "../constants/colors";
 
 /* ─── Constants ──────────────────────────────────────────────────────────── */
 const FREQUENCIES = [
@@ -31,11 +19,6 @@ const FREQUENCIES = [
 ];
 
 const FREQ_MAP = Object.fromEntries(FREQUENCIES.map((f) => [f.value, f]));
-
-const TYPE_COLORS = {
-  income: { border: "#4ade80", bg: "rgba(74,222,128,0.08)", text: "#4ade80" },
-  expense: { border: "#f87171", bg: "rgba(248,113,113,0.08)", text: "#f87171" },
-};
 
 const EMPTY_FORM = {
   title: "",
@@ -115,11 +98,6 @@ const fmtDate = (d) =>
       })
     : "—";
 
-/**
- * Resolve the category name from a recurring item.
- * The server may return category as an ObjectId string or a populated object
- * depending on whether the controller populates it in the future.
- */
 const resolveCategoryName = (item, categories) => {
   if (item.categoryName) return item.categoryName;
   if (typeof item.category === "object" && item.category?.name)
@@ -787,31 +765,18 @@ const RecurringTransactions = () => {
   };
 
   /* ── Toggle isActive ─────────────────────────────────────────────────────
-   *
-   * FIX summary:
-   *   1. Optimistic update flips isActive in local state immediately.
-   *   2. We call the dedicated toggleRecurringTransaction() which sends
-   *      ONLY { isActive: nextValue } — no extra fields that could be dropped
-   *      or that could corrupt the local item when the response comes back.
-   *   3. On success we merge ONLY isActive from the server response back into
-   *      the existing item, rather than replacing the whole item object.
-   *      This prevents the "title disappears after toggle" bug.
-   *   4. On error we rollback the optimistic update.
    */
   const handleToggle = async (id, currentIsActive) => {
     const nextIsActive = !currentIsActive;
 
-    // 1. Optimistic flip
     setItems((prev) =>
       prev.map((i) => (i._id === id ? { ...i, isActive: nextIsActive } : i)),
     );
     setToggling(id);
 
     try {
-      // 2. Send only { isActive: <newValue> } — nothing else
       const serverDoc = await toggleRecurringTransaction(id, nextIsActive);
 
-      // 3. Merge only the confirmed isActive back — keep all other local fields
       setItems((prev) =>
         prev.map((i) =>
           i._id === id
@@ -821,7 +786,6 @@ const RecurringTransactions = () => {
       );
     } catch (err) {
       console.error("Toggle failed:", err);
-      // 4. Rollback on failure
       setItems((prev) =>
         prev.map((i) =>
           i._id === id ? { ...i, isActive: currentIsActive } : i,

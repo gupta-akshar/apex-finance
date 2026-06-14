@@ -5,20 +5,12 @@ import {
   deleteCategoryAPI,
 } from "../api/categoryApi";
 import DeleteConfirm from "../components/DeleteConfirm";
+import useFonts from "../hooks/useFonts";
+import { TYPE_COLORS } from "../constants/colors";
 
 /* ─── Font injection (shared with Dashboard/Transactions) ─────────────────── */
 const FONT_HREF =
   "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@300;400;500;600&display=swap";
-
-function useFonts() {
-  useEffect(() => {
-    if (document.querySelector(`link[href="${FONT_HREF}"]`)) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = FONT_HREF;
-    document.head.appendChild(link);
-  }, []);
-}
 
 /* ─── Constants ───────────────────────────────────────────────────────────── */
 const TYPE_OPTIONS = [
@@ -26,11 +18,6 @@ const TYPE_OPTIONS = [
   { value: "income", label: "Income" },
   { value: "expense", label: "Expense" },
 ];
-
-const TYPE_COLORS = {
-  income: { border: "#4ade80", bg: "rgba(74,222,128,0.08)", text: "#4ade80" },
-  expense: { border: "#f87171", bg: "rgba(248,113,113,0.08)", text: "#f87171" },
-};
 
 /* ─── Shared class fragments ──────────────────────────────────────────────── */
 const inputCls = [

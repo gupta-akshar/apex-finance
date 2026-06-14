@@ -12,18 +12,7 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-
-/* ─── Palette ────────────────────────────────────────────────────────────── */
-const COLORS = [
-  "#6366f1",
-  "#4ade80",
-  "#f87171",
-  "#facc15",
-  "#a78bfa",
-  "#fb923c",
-  "#38bdf8",
-  "#f472b6",
-];
+import { PIE_COLORS } from "../constants/colors";
 
 /* ─── Custom tooltip ─────────────────────────────────────────────────────── */
 const ChartTooltip = ({ active, payload, label }) => {
@@ -112,7 +101,7 @@ export const ExpensePieChart = ({ data }) => {
             {data.map((_, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={COLORS[index % COLORS.length]}
+                fill={PIE_COLORS[index % PIE_COLORS.length]}
                 opacity={0.9}
               />
             ))}

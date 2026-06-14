@@ -1,21 +1,5 @@
-import React, { useEffect } from "react";
-
-/* ─── Font injection (JetBrains Mono for numbers) ────────────────────────── */
-const MONO_HREF =
-  "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@300;400;500;600&display=swap";
-
-let fontInjected = false;
-function injectFont() {
-  if (fontInjected || document.querySelector(`link[href="${MONO_HREF}"]`)) {
-    fontInjected = true;
-    return;
-  }
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = MONO_HREF;
-  document.head.appendChild(link);
-  fontInjected = true;
-}
+import React from "react";
+import useFonts from "../hooks/useFonts";
 
 /* ─── Color map ──────────────────────────────────────────────────────────── */
 const COLOR_MAP = {
@@ -52,22 +36,8 @@ const DEFAULT_COLORS = {
   text: "#e4e4e7",
 };
 
-/**
- * SummaryCard
- *
- * Props (unchanged API):
- *   title  {string}  — label above the number
- *   value  {number}  — numeric value in ₹
- *   color  {string}  — Tailwind text-color class used for semantic color
- *
- * Optional:
- *   icon   {string}  — emoji / character shown in the icon slot
- *   sub    {string}  — tiny sub-label below the number
- */
 const SummaryCard = ({ title, value, color = "text-white", icon, sub }) => {
-  useEffect(() => {
-    injectFont();
-  }, []);
+  useFonts();
 
   const { border, glow, text } = COLOR_MAP[color] ?? DEFAULT_COLORS;
 

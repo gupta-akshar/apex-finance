@@ -6,20 +6,11 @@ import TransactionModal from "../components/TransactionModal";
 import SummaryCard from "../components/SummaryCard";
 import { ExpensePieChart, IncomeExpenseBarChart } from "../components/Chart";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
+import useFonts from "../hooks/useFonts";
 
 /* ─── Font injection ─────────────────────────────────────────────────────── */
 const FONT_HREF =
   "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@300;400;500;600&display=swap";
-
-function useFonts() {
-  useEffect(() => {
-    if (document.querySelector(`link[href="${FONT_HREF}"]`)) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = FONT_HREF;
-    document.head.appendChild(link);
-  }, []);
-}
 
 /* ─── Greeting helper ────────────────────────────────────────────────────── */
 function greeting() {

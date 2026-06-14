@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -15,34 +15,8 @@ import {
   AreaChart,
 } from "recharts";
 import useAnalytics from "../hooks/useAnalytics";
-
-/* ─── Font injection ─────────────────────────────────────────────────────── */
-const FONT_HREF =
-  "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@300;400;500;600&display=swap";
-
-function useFonts() {
-  useEffect(() => {
-    if (document.querySelector(`link[href="${FONT_HREF}"]`)) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = FONT_HREF;
-    document.head.appendChild(link);
-  }, []);
-}
-
-/* ─── Palette ────────────────────────────────────────────────────────────── */
-const PIE_COLORS = [
-  "#6366f1",
-  "#4ade80",
-  "#f87171",
-  "#facc15",
-  "#a78bfa",
-  "#fb923c",
-  "#38bdf8",
-  "#f472b6",
-  "#34d399",
-  "#e879f9",
-];
+import useFonts from "../hooks/useFonts";
+import { PIE_COLORS, INCOME_PIE_COLORS } from "../constants/colors";
 
 const MONTH_LABELS = [
   "Jan",
@@ -652,7 +626,9 @@ const Reports = () => {
                         {expenseCategories.map((_, i) => (
                           <Cell
                             key={i}
-                            fill={PIE_COLORS[i % PIE_COLORS.length]}
+                            fill={
+                              INCOME_PIE_COLORS[i % INCOME_PIE_COLORS.length]
+                            }
                             opacity={0.88}
                           />
                         ))}

@@ -1,20 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React, { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
-
-/* ─── Google Fonts injected once ─────────────────────────────────────────── */
-const FONT_HREF =
-  "https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap";
-
-function useFontInjection() {
-  useEffect(() => {
-    if (document.querySelector(`link[href="${FONT_HREF}"]`)) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = FONT_HREF;
-    document.head.appendChild(link);
-  }, []);
-}
+import useFonts from "../hooks/useFonts";
 
 /* ─── Feature card data ───────────────────────────────────────────────────── */
 const FEATURES = [
@@ -69,7 +56,7 @@ const Stat = ({ value, label }) => (
 /*  LANDING PAGE                                                               */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 const LandingPage = () => {
-  useFontInjection();
+  useFonts("landing");
   const navigate = useNavigate();
   const heroRef = useRef(null);
 
