@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTransactions } from "../hooks/useTransactions";
+import useRecentTransactions from "../hooks/useRecentTransactions";
 import { useAuth } from "../hooks/useAuth";
 import TransactionModal from "../components/TransactionModal";
 import SummaryCard from "../components/SummaryCard";
@@ -165,21 +165,8 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const {
-    transactions: recentTransactions,
-    loading: recentLoading,
-    resetFilters,
-  } = useTransactions();
-
-  useEffect(() => {
-    resetFilters();
-  }, [resetFilters]);
-
-  // Slice to 5 regardless of whatever limit the context currently uses
-  const recentTx = useMemo(
-    () => recentTransactions.slice(0, 5),
-    [recentTransactions],
-  );
+  const { transactions: recentTx, loading: recentLoading } =
+    useRecentTransactions(5);
 
   // ── Server-driven analytics ───────────────────────────────────────────────
 
