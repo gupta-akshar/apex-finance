@@ -11,6 +11,7 @@ import analyticsRoutes from "./routes/analytics.routes.js";
 import budgetRoutes from "./routes/budget.routes.js";
 import recurringRoutes from "./routes/recurring.routes.js";
 import categoryRoutes from "./routes/category.routes.js";
+import healthRoutes from "./routes/health.routes.js";
 
 import { notFound, errorHandler } from "./middlewares/error.middleware.js";
 
@@ -52,6 +53,7 @@ app.use((req, res, next) => {
 
 // Routes
 app.use("/api", apiLimiter);
+app.use("/api", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/users", userRoutes);
