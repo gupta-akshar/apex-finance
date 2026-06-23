@@ -20,7 +20,7 @@ const formatDate = (date) => {
  *
  * Accepts normalized transactions where `categoryName` is set by TransactionProvider.
  */
-const TransactionTable = ({ transactions, onDelete }) => {
+const TransactionTable = ({ transactions, onDelete, onEdit }) => {
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const handleDeleteConfirm = async () => {
@@ -47,7 +47,7 @@ const TransactionTable = ({ transactions, onDelete }) => {
                   "Amount",
                   "Note",
                   "Date",
-                  onDelete && "",
+                  (onDelete || onEdit) && "",
                 ].map(
                   (h, i) =>
                     h !== undefined && (
@@ -116,20 +116,33 @@ const TransactionTable = ({ transactions, onDelete }) => {
                       {formatDate(tx.date)}
                     </td>
 
-                    {onDelete && (
+                    {(onDelete || onEdit) && (
                       <td className="px-4 py-2.5 text-right">
-                        <button
-                          onClick={() =>
-                            setDeleteTarget({
-                              _id: tx._id,
-                              label: tx.categoryName || "this transaction",
-                            })
-                          }
-                          className="text-[11px] text-secondaryText/50 hover:text-red-400
-                                   transition-colors px-2 py-0.5 rounded hover:bg-red-400/10"
-                        >
-                          Delete
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          {onEdit && (
+                            <button
+                              onClick={() => onEdit(tx)}
+                              className="text-[11px] text-secondaryText/50 hover:text-accent
+                                       transition-colors px-2 py-0.5 rounded hover:bg-accent/10"
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {onDelete && (
+                            <button
+                              onClick={() =>
+                                setDeleteTarget({
+                                  _id: tx._id,
+                                  label: tx.categoryName || "this transaction",
+                                })
+                              }
+                              className="text-[11px] text-secondaryText/50 hover:text-red-400
+                                       transition-colors px-2 py-0.5 rounded hover:bg-red-400/10"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>

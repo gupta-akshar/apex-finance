@@ -3,6 +3,7 @@ import { useTransactions } from "../hooks/useTransactions";
 import TransactionsToolbar from "../components/TransactionsToolbar";
 import TransactionFilters from "../components/TransactionFilters";
 import TransactionTable from "../components/TransactionTable";
+import TransactionModal from "../components/TransactionModal";
 import Pagination from "../components/Pagination";
 
 const Transactions = () => {
@@ -10,6 +11,12 @@ const Transactions = () => {
 
   // Controls the advanced filter panel — toggled by the toolbar button
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Edit modal state
+  const [editTarget, setEditTarget] = useState(null);
+
+  const handleEdit = (tx) => setEditTarget(tx);
+  const handleEditClose = () => setEditTarget(null);
 
   return (
     <div className="min-h-screen bg-background text-primaryText flex flex-col">
@@ -60,11 +67,21 @@ const Transactions = () => {
             <TransactionTable
               transactions={transactions}
               onDelete={removeTransaction}
+              onEdit={handleEdit}
             />
             <Pagination />
           </>
         )}
       </div>
+
+      {/* ── Edit Modal ── */}
+      {editTarget && (
+        <TransactionModal
+          mode={editTarget.type}
+          transaction={editTarget}
+          onClose={handleEditClose}
+        />
+      )}
     </div>
   );
 };
