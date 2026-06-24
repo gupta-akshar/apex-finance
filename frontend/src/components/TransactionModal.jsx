@@ -13,6 +13,9 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
     transaction?.date ? transaction.date.slice(0, 10) : "",
   );
   const [note, setNote] = useState(transaction?.note || "");
+  const [paymentMethod, setPaymentMethod] = useState(
+    transaction?.paymentMethod || "upi",
+  );
   const [categories, setCategories] = useState([]);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -43,7 +46,21 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
     e.preventDefault();
     setError("");
     setWarning("");
-    // ...validation unchanged...
+
+    if (!amount || Number(amount) <= 0)
+      return setError("Enter a valid amount.");
+    if (!category) return setError("Please select a category.");
+    if (!date) return setError("Please select a date.");
+
+    const payload = {
+      type: isIncome ? "income" : "expense",
+      amount: Number(amount),
+      category,
+      note,
+      date,
+      paymentMethod, // now explicitly set by the user
+    };
+
     try {
       setSubmitting(true);
       if (isEditing) {
@@ -52,7 +69,7 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
       } else {
         const { budgetWarning, warningMessage } = await addTransaction(payload);
         if (budgetWarning && warningMessage) {
-          setWarning(warningMessage); // stay open — user must dismiss
+          setWarning(warningMessage);
         } else {
           onClose();
         }
@@ -156,6 +173,18 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
           onChange={(e) => setDate(e.target.value)}
           className="w-full mb-3 bg-inputBg border border-border rounded-lg px-3 py-2"
         />
+
+        {/* Payment Method */}
+        <select
+          value={paymentMethod}
+          onChange={(e) => setPaymentMethod(e.target.value)}
+          className="w-full mb-3 bg-inputBg border border-border rounded-lg px-3 py-2"
+        >
+          <option value="upi">UPI</option>
+          <option value="cash">Cash</option>
+          <option value="card">Card</option>
+          <option value="bank">Bank Transfer</option>
+        </select>
 
         {/* Note */}
         <input
