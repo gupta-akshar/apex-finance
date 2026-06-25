@@ -17,7 +17,7 @@ export const clearAccessToken = () => {
 // ─── Axios instance ───────────────────────────────────────────────────────────
 
 const API = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
   withCredentials: true,
 });
 
@@ -81,8 +81,11 @@ API.interceptors.response.use(
       try {
         console.log("🔁 Access token expired → trying refresh...");
 
+        const refreshBase =
+          import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
         const res = await axios.post(
-          "http://localhost:5000/api/auth/refresh",
+          `${refreshBase}/auth/refresh`,
           {},
           { withCredentials: true },
         );

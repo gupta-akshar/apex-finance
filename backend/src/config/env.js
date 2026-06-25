@@ -4,8 +4,11 @@ export const loadEnv = () => {
   const result = dotenv.config();
 
   if (result.error) {
-    throw new Error("Failed to load environment variables");
+    console.info(
+      "[env] No .env file found — relying on host-provided environment variables.",
+    );
+    return;
   }
 
-  console.log("Environment variables loaded");
+  console.info("[env] Environment variables loaded from .env");
 };
