@@ -47,10 +47,16 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
     setError("");
     setWarning("");
 
-    if (!amount || Number(amount) <= 0)
+    // ── Validation ────────────────────────────────────────────────────────────
+    if (!amount || Number(amount) <= 0) {
       return setError("Enter a valid amount.");
-    if (!category) return setError("Please select a category.");
-    if (!date) return setError("Please select a date.");
+    }
+    if (!category) {
+      return setError("Please select a category.");
+    }
+    if (!date) {
+      return setError("Please select a date.");
+    }
 
     const payload = {
       type: isIncome ? "income" : "expense",
@@ -58,7 +64,7 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
       category,
       note,
       date,
-      paymentMethod, // now explicitly set by the user
+      paymentMethod,
     };
 
     try {

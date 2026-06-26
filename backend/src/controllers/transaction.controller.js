@@ -4,10 +4,6 @@ import mongoose from "mongoose";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Build a MongoDB filter object from request query params.
- * All filters are scoped to the logged-in user.
- */
 const buildFilter = (userId, query) => {
   const { type, category, startDate, endDate, month, year, search } = query;
 
@@ -69,6 +65,8 @@ const buildSort = (sort) => {
       return { date: -1 };
   }
 };
+
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // ─── CREATE ───────────────────────────────────────────────────────────────────
 // @route   POST /api/transactions
@@ -143,8 +141,7 @@ export const createTransaction = async (req, res, next) => {
 // ─── GET (paginated + filtered) ───────────────────────────────────────────────
 // @route   GET /api/transactions
 // @access  Private
-// Query params: page, limit, type, category, startDate, endDate, month, year,
-//               search, sort (latest|oldest|highest|lowest)
+
 export const getTransactions = async (req, res, next) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -155,9 +152,8 @@ export const getTransactions = async (req, res, next) => {
 
     const filter = buildFilter(req.user._id, req.query);
 
-    // ── With search: use aggregation so we can filter on populated category.name
     if (search) {
-      const searchRegex = new RegExp(search, "i");
+      const searchRegex = new RegExp(escapeRegex(search), "i");
 
       const pipeline = [
         { $match: filter },
@@ -169,7 +165,8 @@ export const getTransactions = async (req, res, next) => {
             as: "category",
           },
         },
-        { $unwind: { path: "$category", preserveNullAndEmpty: true } },
+
+        { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } },
         {
           $match: {
             $or: [{ "category.name": searchRegex }, { note: searchRegex }],

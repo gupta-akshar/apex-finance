@@ -1,4 +1,3 @@
-// backend/src/controllers/budget.controller.js
 import mongoose from "mongoose";
 import Budget from "../models/Budget.js";
 import Transaction from "../models/Transaction.js";
@@ -6,10 +5,6 @@ import Category from "../models/Category.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Coerce a value to a Mongoose ObjectId.
- * Returns null if the value is not a valid 24-hex ObjectId string.
- */
 const toObjectId = (value) => {
   if (!value) return null;
   if (value instanceof mongoose.Types.ObjectId) return value;
@@ -21,7 +16,6 @@ const toObjectId = (value) => {
 
 // ─── CREATE OR UPDATE BUDGET ──────────────────────────────────────────────────
 // POST /api/budgets
-// Body: { category: <ObjectId string>, limit, month, year }
 export const setBudget = async (req, res, next) => {
   try {
     const { category, limit, month, year } = req.body;
@@ -39,7 +33,6 @@ export const setBudget = async (req, res, next) => {
     }
 
     // ── Confirm the category belongs to this user ─────────────────────────
-    // This prevents users from setting budgets against other users' categories
     const categoryDoc = await Category.findOne({
       _id: categoryId,
       user: req.user._id,
@@ -99,21 +92,34 @@ export const getBudgetStatus = async (req, res, next) => {
       return res.status(200).json([]);
     }
 
+    const validBudgets = budgets.filter((b) => b.category !== null);
+    const orphanedCount = budgets.length - validBudgets.length;
+
+    if (orphanedCount > 0) {
+      console.warn(
+        `[getBudgetStatus] ${orphanedCount} budget(s) reference a deleted ` +
+          `category for user ${req.user._id} — skipping.`,
+      );
+    }
+
+    if (validBudgets.length === 0) {
+      return res.status(200).json([]);
+    }
+
     // ── Build date range for the month ────────────────────────────────────
     const startDate = new Date(numericYear, numericMonth - 1, 1);
     const endDate = new Date(numericYear, numericMonth, 0, 23, 59, 59, 999);
 
     // ── Collect the category ObjectIds this user has budgeted ─────────────
-    const categoryIds = budgets.map((b) => b.category._id);
+    const categoryIds = validBudgets.map((b) => b.category._id);
 
     // ── Aggregate spending grouped by category ObjectId ───────────────────
-    // Both sides are now ObjectId — comparison is exact and correct.
     const expenses = await Transaction.aggregate([
       {
         $match: {
           user: req.user._id,
           type: "expense",
-          category: { $in: categoryIds }, // ObjectId array filter
+          category: { $in: categoryIds },
           date: {
             $gte: startDate,
             $lte: endDate,
@@ -122,21 +128,20 @@ export const getBudgetStatus = async (req, res, next) => {
       },
       {
         $group: {
-          _id: "$category", // groups by ObjectId
+          _id: "$category",
           spent: { $sum: "$amount" },
         },
       },
     ]);
 
     // ── Build a lookup map: ObjectId string → amount spent ────────────────
-    // Both keys are ObjectId.toString() so they match reliably.
     const spentMap = {};
     expenses.forEach((e) => {
       spentMap[e._id.toString()] = e.spent;
     });
 
     // ── Merge budget limits with spending data ────────────────────────────
-    const result = budgets.map((budget) => {
+    const result = validBudgets.map((budget) => {
       const categoryKey = budget.category._id.toString();
       const spent = spentMap[categoryKey] ?? 0;
       const remaining = budget.limit - spent;
