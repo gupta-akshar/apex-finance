@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import API, { setAccessToken, clearAccessToken } from "../api/axios";
 import { AuthContext } from "./AuthContext";
+import { clearCategoryCache } from "../hooks/useCategories";
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -23,6 +24,7 @@ export const AuthProvider = ({ children }) => {
   // ─── Listen for forced logout from axios interceptor ────────────────────
   useEffect(() => {
     const handleForcedLogout = () => {
+      clearCategoryCache();
       setUser(null);
       navigate("/login");
     };
@@ -71,6 +73,7 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       console.error("Logout API error:", err);
     } finally {
+      clearCategoryCache();
       clearAccessToken();
       delete API.defaults.headers.common["Authorization"];
       setUser(null);

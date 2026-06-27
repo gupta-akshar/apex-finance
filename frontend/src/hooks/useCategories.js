@@ -10,6 +10,12 @@ let _promise = null;
 const isCacheValid = () =>
   _cache !== null && Date.now() - _cache.fetchedAt < CACHE_TTL_MS;
 
+// ─── Cache invalidation ───────────────────────────────────────────────────────
+export const clearCategoryCache = () => {
+  _cache = null;
+  _promise = null;
+};
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 const useCategories = () => {
   const [categories, setCategories] = useState(() =>

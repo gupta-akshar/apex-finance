@@ -56,18 +56,34 @@ export const changePassword = async (req, res, next) => {
       return res.status(400).json({ message: "Both passwords required" });
     }
 
-    const user = await User.findById(req.user._id).select("+password");
+    // ── Select both sensitive fields in one query ─────────────────────────
+    // refreshToken has select:false in the schema, so it must be explicitly
+    // requested here. Without +refreshToken the assignment below would be set
+    // on an unloaded field and Mongoose would not persist it on save().
+    const user = await User.findById(req.user._id).select(
+      "+password +refreshToken",
+    );
 
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {
       return res.status(400).json({ message: "Current password incorrect" });
     }
 
-    // ── Assign plain; the pre-save hook hashes it ─────────────────────────
     user.password = newPassword;
-    await user.save(); // isModified("password") = true → hook runs
+    user.refreshToken = null;
+    await user.save();
 
-    res.status(200).json({ message: "Password updated successfully" });
+    // ── Clear the refresh token cookie ────────────────────────────────────
+    const isProd = process.env.NODE_ENV === "production";
+
+    res
+      .clearCookie("refreshToken", {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
+      })
+      .status(200)
+      .json({ message: "Password updated. Please log in again." });
   } catch (error) {
     next(error);
   }

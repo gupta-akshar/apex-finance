@@ -1,4 +1,6 @@
 import Category from "../models/Category.js";
+import Budget from "../models/Budget.js";
+import RecurringTransaction from "../models/RecurringTransaction.js";
 
 // GET all categories — scoped to the authenticated user
 export const getCategories = async (req, res) => {
@@ -31,25 +33,43 @@ export const addCategory = async (req, res) => {
   }
 };
 
-// DELETE category — ownership enforced: only the owning user can delete
+// DELETE category — ownership enforced + cascade cleanup
 export const deleteCategory = async (req, res) => {
   try {
-    // SECURITY FIX: was Category.findByIdAndDelete(req.params.id)
-    // That allowed any authenticated user to delete any category by id.
-    // Now we scope the query to { _id, user } so the delete only succeeds
-    // when the document belongs to the requesting user.
+    // ── 1. Delete the category (ownership enforced by the compound filter) ─
     const category = await Category.findOneAndDelete({
       _id: req.params.id,
       user: req.user._id,
     });
 
     if (!category) {
-      // Returns 404 whether the document doesn't exist OR belongs to another
-      // user — deliberately indistinguishable to prevent resource enumeration.
       return res.status(404).json({ message: "Category not found" });
     }
 
-    res.json({ message: "Category deleted" });
+    // ── 2. Cascade: remove orphaned budgets ───────────────────────────────
+    const budgetResult = await Budget.deleteMany({
+      category: category._id,
+      user: req.user._id,
+    });
+
+    // ── 3. Cascade: deactivate orphaned recurring transactions ────────────
+    const recurringResult = await RecurringTransaction.updateMany(
+      {
+        category: category._id,
+        user: req.user._id,
+        isActive: true,
+      },
+      { $set: { isActive: false } },
+    );
+
+    // ── 4. Respond with cascade summary ───────────────────────────────────
+    res.json({
+      message: "Category deleted",
+      cascade: {
+        budgetsDeleted: budgetResult.deletedCount,
+        recurringDeactivated: recurringResult.modifiedCount,
+      },
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
