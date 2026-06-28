@@ -68,6 +68,41 @@ const buildSort = (sort) => {
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const applyTransactionFields = (doc, source) => {
+  // ── type ──────────────────────────────────────────────────────────────────
+
+  if (source.type !== undefined) {
+    if (["income", "expense"].includes(source.type)) {
+      doc.type = source.type;
+    }
+  }
+
+  // ── amount ────────────────────────────────────────────────────────────────
+  if (source.amount !== undefined) {
+    doc.amount = source.amount;
+  }
+
+  // ── category ─────────────────────────────────────────────────────────────
+  if (source.category !== undefined) {
+    doc.category = source.category;
+  }
+
+  // ── note ─────────────────────────────────────────────────────────────────
+  if (source.note !== undefined) {
+    doc.note = source.note;
+  }
+
+  // ── date ─────────────────────────────────────────────────────────────────
+  if (source.date !== undefined) {
+    doc.date = source.date;
+  }
+
+  // ── paymentMethod ─────────────────────────────────────────────────────────
+  if (source.paymentMethod !== undefined) {
+    doc.paymentMethod = source.paymentMethod;
+  }
+};
+
 // ─── CREATE ───────────────────────────────────────────────────────────────────
 // @route   POST /api/transactions
 // @access  Private
@@ -84,8 +119,8 @@ export const createTransaction = async (req, res, next) => {
 
     if (type === "expense") {
       const d = new Date(date);
-      const month = d.getMonth() + 1;
-      const year = d.getFullYear();
+      const month = d.getUTCMonth() + 1;
+      const year = d.getUTCFullYear();
 
       const budget = await Budget.findOne({
         user: req.user._id,
@@ -96,7 +131,7 @@ export const createTransaction = async (req, res, next) => {
 
       if (budget) {
         const startDate = new Date(Date.UTC(year, month - 1, 1));
-        const endDate = new Date(Date.UTC(year, month, 1));
+        const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
         const result = await Transaction.aggregate([
           {
@@ -141,7 +176,6 @@ export const createTransaction = async (req, res, next) => {
 // ─── GET (paginated + filtered) ───────────────────────────────────────────────
 // @route   GET /api/transactions
 // @access  Private
-
 export const getTransactions = async (req, res, next) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -250,7 +284,8 @@ export const updateTransaction = async (req, res, next) => {
       return res.status(404).json({ message: "Transaction not found" });
     }
 
-    Object.assign(transaction, req.body);
+    applyTransactionFields(transaction, req.body);
+
     const updated = await transaction.save();
 
     res.status(200).json({ transaction: updated });
