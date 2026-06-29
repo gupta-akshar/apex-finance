@@ -74,6 +74,7 @@ export const getRecurringTransactions = async (req, res, next) => {
     const recurring = await RecurringTransaction.find({
       user: req.user._id,
     })
+      .populate("category", "name type")
       .sort({ createdAt: -1 })
       .limit(500);
 

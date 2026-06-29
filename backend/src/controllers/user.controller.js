@@ -6,6 +6,27 @@ import Category from "../models/Category.js";
 import Budget from "../models/Budget.js";
 import RecurringTransaction from "../models/RecurringTransaction.js";
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const isProd = process.env.NODE_ENV === "production";
+
+const isTransactionUnsupportedError = (err) =>
+  err?.code === 20 ||
+  err?.codeName === "IllegalOperation" ||
+  (typeof err?.message === "string" &&
+    err.message.includes("Transaction numbers are only allowed"));
+
+const deleteUserData = async (userId, session) => {
+  const opts = session ? { session } : {};
+  await Transaction.deleteMany({ user: userId }, opts);
+  await Category.deleteMany({ user: userId }, opts);
+  await Budget.deleteMany({ user: userId }, opts);
+  await RecurringTransaction.deleteMany({ user: userId }, opts);
+  await User.findByIdAndDelete(userId, opts);
+};
+
+// ─── CONTROLLERS ─────────────────────────────────────────────────────────────
+
 // @route   GET /api/users/profile
 // @access  Private
 export const getUserProfile = async (req, res, next) => {
@@ -56,10 +77,6 @@ export const changePassword = async (req, res, next) => {
       return res.status(400).json({ message: "Both passwords required" });
     }
 
-    // ── Select both sensitive fields in one query ─────────────────────────
-    // refreshToken has select:false in the schema, so it must be explicitly
-    // requested here. Without +refreshToken the assignment below would be set
-    // on an unloaded field and Mongoose would not persist it on save().
     const user = await User.findById(req.user._id).select(
       "+password +refreshToken",
     );
@@ -74,8 +91,6 @@ export const changePassword = async (req, res, next) => {
     await user.save();
 
     // ── Clear the refresh token cookie ────────────────────────────────────
-    const isProd = process.env.NODE_ENV === "production";
-
     res
       .clearCookie("refreshToken", {
         httpOnly: true,
@@ -92,35 +107,67 @@ export const changePassword = async (req, res, next) => {
 // @route   DELETE /api/users
 // @access  Private
 export const deleteAccount = async (req, res, next) => {
+  const { currentPassword } = req.body;
+
+  if (!currentPassword) {
+    return res
+      .status(400)
+      .json({ message: "currentPassword is required to delete your account" });
+  }
+
+  let user;
+  try {
+    user = await User.findById(req.user._id).select("+password");
+  } catch (error) {
+    return next(error);
+  }
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  const isMatch = await user.comparePassword(currentPassword);
+  if (!isMatch) {
+    return res.status(401).json({ message: "Incorrect password" });
+  }
+
+  const userId = req.user._id;
+
   const session = await mongoose.startSession();
 
   try {
     session.startTransaction();
-
-    const userId = req.user._id;
-
-    await Transaction.deleteMany({ user: userId }, { session });
-    await Category.deleteMany({ user: userId }, { session });
-    await Budget.deleteMany({ user: userId }, { session });
-    await RecurringTransaction.deleteMany({ user: userId }, { session });
-    await User.findByIdAndDelete(userId, { session });
-
+    await deleteUserData(userId, session);
     await session.commitTransaction();
-
-    const isProd = process.env.NODE_ENV === "production";
-
-    res
-      .clearCookie("refreshToken", {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: isProd ? "none" : "lax",
-      })
-      .status(200)
-      .json({ message: "Account deleted successfully" });
-  } catch (error) {
+  } catch (txError) {
     await session.abortTransaction();
-    next(error);
+
+    if (isTransactionUnsupportedError(txError)) {
+      console.warn(
+        "[deleteAccount] Transactions not supported — " +
+          "falling back to sequential deletes (standalone MongoDB detected).",
+      );
+
+      try {
+        await deleteUserData(userId, null);
+      } catch (fallbackError) {
+        return next(fallbackError);
+      }
+    } else {
+      // Unexpected error — propagate to the global error handler
+      return next(txError);
+    }
   } finally {
     await session.endSession();
   }
+
+  // ── Step 3: clear auth state and respond ──────────────────────────────────
+  res
+    .clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+    })
+    .status(200)
+    .json({ message: "Account deleted successfully" });
 };

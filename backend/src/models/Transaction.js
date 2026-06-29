@@ -1,4 +1,3 @@
-// backend/src/models/Transaction.js
 import mongoose from "mongoose";
 
 const transactionSchema = new mongoose.Schema(
@@ -90,6 +89,15 @@ transactionSchema.index(
     unique: true,
     partialFilterExpression: { sourceRecurringId: { $type: "objectId" } },
     name: "recurring_idempotency_idx",
+  },
+);
+
+transactionSchema.index(
+  { note: "text" },
+  {
+    sparse: true,
+    name: "transactions_note_text",
+    default_language: "english",
   },
 );
 
