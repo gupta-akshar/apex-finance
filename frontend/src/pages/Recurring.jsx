@@ -64,7 +64,6 @@ const toMonthly = (amount, frequency) => {
 
 const computeNextDate = (item) => {
   const base = new Date(item.lastExecuted ?? item.startDate);
-  // Work in UTC-midnight to stay timezone-safe
   const d = new Date(
     Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()),
   );
@@ -102,7 +101,6 @@ const resolveCategoryName = (item, categories) => {
   if (item.categoryName) return item.categoryName;
   if (typeof item.category === "object" && item.category?.name)
     return item.category.name;
-  // Fallback: look up in the locally-fetched categories array
   const found = categories.find(
     (c) => c._id === item.category || c._id === item.category?._id,
   );
@@ -578,7 +576,7 @@ const RecurringRow = ({
           </p>
         </div>
 
-        {/* Status toggle — uses isActive */}
+        {/* Status toggle */}
         <StatusToggle
           active={item.isActive}
           loading={toggling}
@@ -661,7 +659,6 @@ const RecurringTransactions = () => {
   const [categories, setCategories] = useState([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  // toggling holds the _id of the item currently mid-toggle (or null)
   const [toggling, setToggling] = useState(null);
 
   const [showForm, setShowForm] = useState(false);
@@ -672,6 +669,9 @@ const RecurringTransactions = () => {
   const [filterFreq, setFilterFreq] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [search, setSearch] = useState("");
+
+  // ── API error state ───────────────────────────────────────────────────────
+  const [apiError, setApiError] = useState("");
 
   /* ── Load ── */
   useEffect(() => {
@@ -685,6 +685,11 @@ const RecurringTransactions = () => {
         setCategories(catData);
       } catch (err) {
         console.error("Failed to load recurring transactions:", err);
+        setApiError(
+          err?.response?.data?.message ||
+            err?.message ||
+            "Failed to load recurring transactions.",
+        );
       } finally {
         setPageLoading(false);
       }
@@ -729,6 +734,7 @@ const RecurringTransactions = () => {
   /* ── Save (add or edit) ── */
   const handleSave = async (formData) => {
     setSaving(true);
+    setApiError("");
     try {
       if (editTarget) {
         const updated = await updateRecurringTransaction(
@@ -746,6 +752,11 @@ const RecurringTransactions = () => {
       setShowForm(false);
     } catch (err) {
       console.error("Save failed:", err);
+      setApiError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to save recurring transaction.",
+      );
     } finally {
       setSaving(false);
     }
@@ -754,18 +765,23 @@ const RecurringTransactions = () => {
   /* ── Delete ── */
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
+    setApiError("");
     try {
       await deleteRecurringTransaction(deleteTarget._id);
       setItems((prev) => prev.filter((i) => i._id !== deleteTarget._id));
     } catch (err) {
       console.error("Delete failed:", err);
+      setApiError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to delete recurring transaction.",
+      );
     } finally {
       setDeleteTarget(null);
     }
   };
 
-  /* ── Toggle isActive ─────────────────────────────────────────────────────
-   */
+  /* ── Toggle isActive ── */
   const handleToggle = async (id, currentIsActive) => {
     const nextIsActive = !currentIsActive;
 
@@ -786,10 +802,16 @@ const RecurringTransactions = () => {
       );
     } catch (err) {
       console.error("Toggle failed:", err);
+      // Roll back optimistic update
       setItems((prev) =>
         prev.map((i) =>
           i._id === id ? { ...i, isActive: currentIsActive } : i,
         ),
+      );
+      setApiError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to update status.",
       );
     } finally {
       setToggling(null);
@@ -1000,6 +1022,25 @@ const RecurringTransactions = () => {
             Automate salaries, subscriptions, bills, and EMIs.
           </p>
         </div>
+
+        {/* ── API Error Banner ── */}
+        {apiError && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-[#f87171]/20 bg-[#f87171]/8">
+            <p
+              className="text-sm text-[#f87171]"
+              style={{ fontFamily: "'Sora', sans-serif" }}
+            >
+              {apiError}
+            </p>
+            <button
+              onClick={() => setApiError("")}
+              className="text-[#f87171]/60 hover:text-[#f87171] text-xs transition-colors shrink-0"
+              aria-label="Dismiss error"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* ── Stats strip ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

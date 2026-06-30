@@ -27,6 +27,12 @@ export const getMonthlySummaryService = async (userId, month, year) => {
         total: { $sum: "$amount" },
       },
     },
+    {
+      $project: {
+        _id: 1,
+        total: { $round: ["$total", 2] },
+      },
+    },
   ]);
 
   let income = 0;
@@ -37,7 +43,11 @@ export const getMonthlySummaryService = async (userId, month, year) => {
     if (item._id === "expense") expense = item.total;
   });
 
-  return { income, expense, balance: income - expense };
+  return {
+    income,
+    expense,
+    balance: Math.round((income - expense) * 100) / 100,
+  };
 };
 
 // ─── 2. Category Breakdown ────────────────────────────────────────────────────
@@ -92,7 +102,7 @@ export const getCategoryBreakdownService = async (
       $project: {
         _id: 0,
         category: { $ifNull: ["$_id.categoryName", "Unknown"] },
-        total: 1,
+        total: { $round: ["$total", 2] },
       },
     },
     { $sort: { total: -1 } },
@@ -118,6 +128,14 @@ export const getOverviewService = async (userId) => {
         transactionsCount: { $sum: 1 },
       },
     },
+    {
+      $project: {
+        _id: 0,
+        totalIncome: { $round: ["$totalIncome", 2] },
+        totalExpense: { $round: ["$totalExpense", 2] },
+        transactionsCount: 1,
+      },
+    },
   ]);
 
   const data = result[0] ?? {
@@ -129,7 +147,7 @@ export const getOverviewService = async (userId) => {
   return {
     totalIncome: data.totalIncome,
     totalExpense: data.totalExpense,
-    balance: data.totalIncome - data.totalExpense,
+    balance: Math.round((data.totalIncome - data.totalExpense) * 100) / 100,
     transactionsCount: data.transactionsCount,
   };
 };
@@ -161,7 +179,7 @@ export const getMonthlyTrendService = async (userId, year) => {
         _id: 0,
         month: "$_id.month",
         type: "$_id.type",
-        total: 1,
+        total: { $round: ["$total", 2] },
       },
     },
     { $sort: { month: 1, type: 1 } },

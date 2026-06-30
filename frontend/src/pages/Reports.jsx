@@ -626,9 +626,7 @@ const Reports = () => {
                         {expenseCategories.map((_, i) => (
                           <Cell
                             key={i}
-                            fill={
-                              INCOME_PIE_COLORS[i % INCOME_PIE_COLORS.length]
-                            }
+                            fill={PIE_COLORS[i % PIE_COLORS.length]}
                             opacity={0.88}
                           />
                         ))}

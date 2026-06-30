@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import useRecentTransactions from "../hooks/useRecentTransactions";
 import { useAuth } from "../hooks/useAuth";
@@ -165,8 +165,11 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const { transactions: recentTx, loading: recentLoading } =
-    useRecentTransactions(5);
+  const {
+    transactions: recentTx,
+    loading: recentLoading,
+    refresh: refreshRecent,
+  } = useRecentTransactions(5);
 
   // ── Server-driven analytics ───────────────────────────────────────────────
 
@@ -184,6 +187,7 @@ const Dashboard = () => {
   const handleModalClose = () => {
     setModalMode(null);
     refreshAnalytics();
+    refreshRecent();
   };
 
   // ── Combined loading state for the initial skeleton ───────────────────────

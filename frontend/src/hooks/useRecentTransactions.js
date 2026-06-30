@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { getTransactions } from "../api/transactionApi";
 
 const useRecentTransactions = (limit = 5) => {
@@ -11,10 +11,44 @@ const useRecentTransactions = (limit = 5) => {
     limitRef.current = limit;
   }, [limit]);
 
+  const refresh = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const data = await getTransactions({
+        limit: limitRef.current,
+        sort: "latest",
+        page: 1,
+      });
+
+      const raw = data.transactions ?? [];
+
+      const normalised = raw.map((tx) => ({
+        ...tx,
+        categoryName:
+          typeof tx.category === "object" && tx.category !== null
+            ? tx.category.name
+            : (tx.category ?? "Unknown"),
+        categoryId:
+          typeof tx.category === "object" && tx.category !== null
+            ? tx.category._id
+            : tx.category,
+      }));
+
+      setTransactions(normalised);
+    } catch (err) {
+      // Recent-activity failing is non-critical; log and leave list empty.
+      console.error("useRecentTransactions error:", err);
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []); // limitRef is a ref — safe to omit from deps
+
   useEffect(() => {
     let cancelled = false;
 
-    const fetch = async () => {
+    const run = async () => {
       setLoading(true);
 
       try {
@@ -43,7 +77,6 @@ const useRecentTransactions = (limit = 5) => {
         setTransactions(normalised);
       } catch (err) {
         if (cancelled) return;
-        // Recent-activity failing is non-critical; log and leave list empty.
         console.error("useRecentTransactions error:", err);
         setTransactions([]);
       } finally {
@@ -51,14 +84,14 @@ const useRecentTransactions = (limit = 5) => {
       }
     };
 
-    fetch();
+    run();
 
     return () => {
       cancelled = true;
     };
   }, [limit]);
 
-  return { transactions, loading };
+  return { transactions, loading, refresh };
 };
 
 export default useRecentTransactions;

@@ -287,6 +287,8 @@ const Categories = () => {
   const [deleteTarget, setDeleteTarget] = useState(null); // { _id, name }
   const [filterType, setFilterType] = useState(""); // "" | "income" | "expense"
   const [search, setSearch] = useState("");
+  // ── API error state ───────────────────────────────────────────────────────
+  const [apiError, setApiError] = useState("");
 
   /* ── Load ── */
   useEffect(() => {
@@ -296,6 +298,11 @@ const Categories = () => {
         setCategories(data);
       } catch (err) {
         console.error("Failed to load categories:", err);
+        setApiError(
+          err?.response?.data?.message ||
+            err?.message ||
+            "Failed to load categories.",
+        );
       } finally {
         setPageLoading(false);
       }
@@ -334,12 +341,18 @@ const Categories = () => {
   /* ── Save ── */
   const handleSave = async ({ name, type }) => {
     setSaving(true);
+    setApiError("");
     try {
       const added = await addCategoryAPI({ name, type });
       setCategories((prev) => [...prev, added]);
       setShowForm(false);
     } catch (err) {
       console.error("Failed to add category:", err);
+      setApiError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to add category.",
+      );
     } finally {
       setSaving(false);
     }
@@ -348,11 +361,17 @@ const Categories = () => {
   /* ── Delete ── */
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
+    setApiError("");
     try {
       await deleteCategoryAPI(deleteTarget._id);
       setCategories((prev) => prev.filter((c) => c._id !== deleteTarget._id));
     } catch (err) {
       console.error("Failed to delete:", err);
+      setApiError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to delete category.",
+      );
     } finally {
       setDeleteTarget(null);
     }
@@ -374,7 +393,6 @@ const Categories = () => {
   }
 
   const hasResults = filtered.length > 0;
-  //const isFiltered = filterType !== "" || search.trim() !== "";
 
   return (
     <div
@@ -502,6 +520,25 @@ const Categories = () => {
             Organise your income and expense categories.
           </p>
         </div>
+
+        {/* ── API Error Banner ── */}
+        {apiError && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-[#f87171]/20 bg-[#f87171]/8 mb-5">
+            <p
+              className="text-sm text-[#f87171]"
+              style={{ fontFamily: "'Sora', sans-serif" }}
+            >
+              {apiError}
+            </p>
+            <button
+              onClick={() => setApiError("")}
+              className="text-[#f87171]/60 hover:text-[#f87171] text-xs transition-colors shrink-0"
+              aria-label="Dismiss error"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* ── Inline Add Form ── */}
         {showForm && (
