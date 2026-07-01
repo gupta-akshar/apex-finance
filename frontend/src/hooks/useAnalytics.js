@@ -81,6 +81,7 @@ const useAnalytics = (year, monthIdx) => {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const { signal } = controller;
 
     setLoading(true);
     setError(null);
@@ -92,28 +93,15 @@ const useAnalytics = (year, monthIdx) => {
     const backendMonth = hasMonth ? Number(monthIdx) + 1 : null;
 
     try {
-      const trendPromise = fetchMonthlyTrend(numericYear);
-
-      const expCatPromise = fetchCategoryBreakdown(
-        "expense",
-        backendMonth,
-        numericYear,
-      );
-      const incCatPromise = fetchCategoryBreakdown(
-        "income",
-        backendMonth,
-        numericYear,
-      );
-
-      const monthlyPromise = hasMonth
-        ? fetchMonthlySummary(backendMonth, numericYear)
-        : Promise.resolve(null);
-
       const [trendRaw, expCat, incCat, monthlySummary] = await Promise.all([
-        trendPromise,
-        expCatPromise,
-        incCatPromise,
-        monthlyPromise,
+        fetchMonthlyTrend(numericYear, { signal }),
+        fetchCategoryBreakdown("expense", backendMonth, numericYear, {
+          signal,
+        }),
+        fetchCategoryBreakdown("income", backendMonth, numericYear, { signal }),
+        hasMonth
+          ? fetchMonthlySummary(backendMonth, numericYear, { signal })
+          : Promise.resolve(null),
       ]);
 
       // Check if this request was superseded

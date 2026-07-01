@@ -1,16 +1,3 @@
-/**
- * useDashboardAnalytics.js
- *
- * Fetches all data the Dashboard needs for its stats cards and charts from the
- * backend analytics API endpoints.  Nothing here touches the paginated
- * TransactionContext — that context only drives the Transactions page list.
- *
- * Endpoints used:
- *   GET /api/analytics/overview         → all-time totals + count
- *   GET /api/analytics/trend?year=Y     → 12-month income/expense buckets
- *   GET /api/analytics/categories?type=expense&year=Y  → pie chart data
- */
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   fetchOverview,
@@ -35,12 +22,6 @@ const MONTH_LABELS = [
   "Dec",
 ];
 
-/**
- * Turn the flat server trend array into 12 ordered buckets for the bar chart.
- *
- * Server shape:  [{ month: 1, type: "income", total: 5000 }, ...]
- * Output shape:  [{ month: "J", income: 0, expense: 0 }, ...] × 12
- */
 const buildMonthlyBuckets = (rawTrend = []) => {
   const buckets = MONTH_LABELS.map((label) => ({
     month: label,
@@ -58,27 +39,11 @@ const buildMonthlyBuckets = (rawTrend = []) => {
   return buckets;
 };
 
-/**
- * Turn the category breakdown array into the shape recharts PieChart expects.
- *
- * Server shape:  [{ category: "Food", total: 3200 }, ...]
- * Output shape:  [{ name: "Food", value: 3200 }, ...]
- */
 const toPieData = (categories = []) =>
   categories.map(({ category, total }) => ({ name: category, value: total }));
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-/**
- * @returns {{
- *   stats:       { totalIncome, totalExpense, balance, transactionsCount }
- *   monthlyData: { month, income, expense }[]   — 12 items
- *   categoryData: { name, value }[]             — expense pie data
- *   loading:     boolean
- *   error:       string | null
- *   refresh:     () => void
- * }}
- */
 const useDashboardAnalytics = () => {
   const currentYear = new Date().getFullYear();
 
@@ -95,30 +60,26 @@ const useDashboardAnalytics = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Abort controller prevents stale responses from overwriting newer ones
   const abortRef = useRef(null);
 
   const load = useCallback(async () => {
-    // Cancel any previous in-flight fetch cycle
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const { signal } = controller;
 
     setLoading(true);
     setError(null);
 
     try {
-      // Fire all three requests in parallel — no sequential waterfall
       const [overview, trendRaw, expenseCats] = await Promise.all([
-        fetchOverview(),
-        fetchMonthlyTrend(currentYear),
-        fetchCategoryBreakdown("expense", null, currentYear),
+        fetchOverview({ signal }),
+        fetchMonthlyTrend(currentYear, { signal }),
+        fetchCategoryBreakdown("expense", null, currentYear, { signal }),
       ]);
 
-      // Bail if this request cycle was superseded
       if (controller.signal.aborted) return;
 
-      // Overview → summary cards
       setStats({
         totalIncome: overview.totalIncome ?? 0,
         totalExpense: overview.totalExpense ?? 0,
@@ -126,10 +87,8 @@ const useDashboardAnalytics = () => {
         transactionsCount: overview.transactionsCount ?? 0,
       });
 
-      // Trend → bar chart
       setMonthlyData(buildMonthlyBuckets(trendRaw));
 
-      // Category breakdown → pie chart
       setCategoryData(toPieData(expenseCats));
     } catch (err) {
       if (err?.name === "CanceledError" || err?.name === "AbortError") return;
