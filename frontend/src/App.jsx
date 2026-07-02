@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 
+import { CategoryProvider } from "./context/CategoryProvider.jsx";
 import { TransactionProvider } from "./context/TransactionProvider.jsx";
 import { useAuth } from "./hooks/useAuth";
 
@@ -75,9 +76,11 @@ function App() {
       <Route
         element={
           <ProtectedRoute>
-            <TransactionProvider>
-              <Layout />
-            </TransactionProvider>
+            <CategoryProvider>
+              <TransactionProvider>
+                <Layout />
+              </TransactionProvider>
+            </CategoryProvider>
           </ProtectedRoute>
         }
       >
