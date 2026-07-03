@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTransactions } from "../hooks/useTransactions";
-import { getCategories } from "../api/categoryApi";
+import useCategories from "../hooks/useCategories";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -33,7 +33,10 @@ const labelCls =
 // ─── Component ────────────────────────────────────────────────────────────────
 const TransactionFilters = ({ isOpen }) => {
   const { filters, setFilters } = useTransactions();
-  const [categories, setCategories] = useState([]);
+
+  // Categories come from context — no local fetch needed
+  const { categories } = useCategories();
+
   const contentRef = useRef(null);
   const [contentHeight, setContentHeight] = useState(0);
 
@@ -47,31 +50,6 @@ const TransactionFilters = ({ isOpen }) => {
     // Initial measurement
     setContentHeight(contentRef.current.scrollHeight);
     return () => ro.disconnect();
-  }, []);
-
-  // Load categories once
-  useEffect(() => {
-    const controller = new AbortController();
-    let cancelled = false;
-
-    getCategories({ signal: controller.signal })
-      .then((data) => {
-        if (!cancelled) setCategories(data);
-      })
-      .catch((err) => {
-        if (
-          !cancelled &&
-          err.name !== "CanceledError" &&
-          err.name !== "AbortError"
-        ) {
-          console.error("Category load error:", err);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
   }, []);
 
   const filteredCategories = filters.type

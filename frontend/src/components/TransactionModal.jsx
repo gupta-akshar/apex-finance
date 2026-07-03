@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { getCategories } from "../api/categoryApi";
+import React, { useState } from "react";
 import { useTransactions } from "../hooks/useTransactions";
+import useCategories from "../hooks/useCategories";
 
 // transaction prop is passed when editing an existing transaction, null when adding new
 const TransactionModal = ({ mode, onClose, transaction = null }) => {
@@ -16,27 +16,16 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
   const [paymentMethod, setPaymentMethod] = useState(
     transaction?.paymentMethod || "upi",
   );
-  const [categories, setCategories] = useState([]);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [warning, setWarning] = useState("");
 
+  // Categories come from context — no local fetch needed
+  const { categories } = useCategories();
+
   const { addTransaction, editTransaction } = useTransactions();
 
   const today = new Date().toISOString().slice(0, 10);
-
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const data = await getCategories();
-        setCategories(data);
-      } catch (err) {
-        console.error("CATEGORY ERROR:", err);
-        setError("Failed to load categories.");
-      }
-    };
-    fetchCategories();
-  }, []);
 
   const filteredCategories = categories.filter(
     (c) => c.type === (isIncome ? "income" : "expense"),
