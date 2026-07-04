@@ -17,8 +17,9 @@ export const startRecurringJob = () => {
     let recovered = 0;
     let failed = 0;
 
-    // ── Fetch candidates ─────────────────────────────────────────────────────
-    // ── Fetch candidates via cursor (avoids loading all docs into memory) ────────
+    const bulkOps = [];
+
+    // ── Fetch candidates via cursor (avoids loading all docs into memory) ────
     let cursor;
     try {
       cursor = RecurringTransaction.find({
@@ -32,11 +33,11 @@ export const startRecurringJob = () => {
       return;
     }
 
-    // ── Process each rule ────────────────────────────────────────────────────────
+    // ── Process each rule ─────────────────────────────────────────────────────
     try {
       for await (const item of cursor) {
         try {
-          // ── Respect endDate ──────────────────────────────────────────────────
+          // ── Respect endDate ────────────────────────────────────────────────
           if (item.endDate) {
             const _ed = new Date(item.endDate);
             const end = new Date(
@@ -50,15 +51,20 @@ export const startRecurringJob = () => {
                 999,
               ),
             );
+
             if (today > end) {
-              item.isActive = false;
-              await item.save();
+              bulkOps.push({
+                updateOne: {
+                  filter: { _id: item._id },
+                  update: { $set: { isActive: false } },
+                },
+              });
               skipped++;
               continue;
             }
           }
 
-          // ── Determine whether this rule is due today ─────────────────────────
+          // ── Determine whether this rule is due today ───────────────────────
           const _base = item.lastExecuted
             ? new Date(item.lastExecuted)
             : new Date(item.startDate);
@@ -103,17 +109,19 @@ export const startRecurringJob = () => {
             continue;
           }
 
-          // ── IDEMPOTENCY CHECK ────────────────────────────────────────────────
+          // ── IDEMPOTENCY CHECK ──────────────────────────────────────────────
           const existingTx = await Transaction.exists({
             sourceRecurringId: item._id,
             date: { $gte: today, $lt: tomorrow },
           });
 
           if (existingTx) {
-            await RecurringTransaction.updateOne(
-              { _id: item._id },
-              { $set: { lastExecuted: today } },
-            );
+            bulkOps.push({
+              updateOne: {
+                filter: { _id: item._id },
+                update: { $set: { lastExecuted: today } },
+              },
+            });
             recovered++;
             console.log(
               `  ↻ Recovered "${item.title || item._id}" — ` +
@@ -122,7 +130,7 @@ export const startRecurringJob = () => {
             continue;
           }
 
-          // ── CREATE TRANSACTION ───────────────────────────────────────────────
+          // ── CREATE TRANSACTION ─────────────────────────────────────────────
           await Transaction.create({
             user: item.user,
             type: item.type,
@@ -133,10 +141,13 @@ export const startRecurringJob = () => {
             sourceRecurringId: item._id,
           });
 
-          await RecurringTransaction.updateOne(
-            { _id: item._id },
-            { $set: { lastExecuted: today } },
-          );
+          // Queue lastExecuted update – no immediate DB round-trip.
+          bulkOps.push({
+            updateOne: {
+              filter: { _id: item._id },
+              update: { $set: { lastExecuted: today } },
+            },
+          });
 
           processed++;
           console.log(
@@ -144,16 +155,12 @@ export const startRecurringJob = () => {
               `for user ${item.user}`,
           );
         } catch (err) {
-          // ── DUPLICATE KEY ────────────────────────────────────────────────────
           if (err.code === 11000) {
-            await RecurringTransaction.updateOne(
-              { _id: item._id },
-              { $set: { lastExecuted: today } },
-            ).catch((syncErr) => {
-              console.error(
-                `  ✗ Could not sync lastExecuted after duplicate for ` +
-                  `${item._id}: ${syncErr.message}`,
-              );
+            bulkOps.push({
+              updateOne: {
+                filter: { _id: item._id },
+                update: { $set: { lastExecuted: today } },
+              },
             });
             recovered++;
             console.log(
@@ -172,6 +179,17 @@ export const startRecurringJob = () => {
       }
     } finally {
       await cursor.close();
+    }
+
+    if (bulkOps.length > 0) {
+      try {
+        await RecurringTransaction.bulkWrite(bulkOps, { ordered: false });
+      } catch (bulkErr) {
+        console.error(
+          `Recurring job: bulkWrite failed (${bulkOps.length} ops): ` +
+            bulkErr.message,
+        );
+      }
     }
 
     console.log(
