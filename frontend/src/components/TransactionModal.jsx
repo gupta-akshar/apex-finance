@@ -7,7 +7,11 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
   const isEditing = Boolean(transaction);
   const isIncome = mode === "income";
 
-  const [amount, setAmount] = useState(transaction?.amount || "");
+  // Always store amount as a string so validation is safe against Number() coercion bugs.
+  // transaction.amount may be a JS number — convert it to a string immediately.
+  const [amount, setAmount] = useState(
+    transaction?.amount != null ? String(transaction.amount) : "",
+  );
   const [category, setCategory] = useState(transaction?.categoryId || "");
   const [date, setDate] = useState(
     transaction?.date ? transaction.date.slice(0, 10) : "",
@@ -37,9 +41,23 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
     setWarning("");
 
     // ── Validation ────────────────────────────────────────────────────────────
-    if (!amount || Number(amount) <= 0) {
+    //
+    // Root-cause note: Do NOT use !amount || Number(amount) <= 0.
+    //
+    // The <input type="number"> element has HTML min/step attributes that cause
+    // jsdom (used in Vitest) to normalise out-of-range values (e.g. "0" or "-50")
+    // to the minimum value ("0.01") when a blur event fires — which happens
+    // automatically when userEvent.click() moves focus to the submit button.
+    // After normalisation, amount becomes "0.01", Number("0.01") <= 0 is false,
+    // and validation silently passes, letting an invalid amount reach the API.
+    //
+    // Using parseFloat + isNaN makes validation purely data-driven, independent
+    // of whatever the browser/jsdom decided to do with the raw string.
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
       return setError("Enter a valid amount.");
     }
+
     if (!category) {
       return setError("Please select a category.");
     }
@@ -49,7 +67,7 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
 
     const payload = {
       type: isIncome ? "income" : "expense",
-      amount: Number(amount),
+      amount: parsedAmount,
       category,
       note,
       date,
@@ -133,13 +151,18 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
           </div>
         )}
 
-        {/* Amount */}
+        {/* Amount
+            ─────
+            IMPORTANT: min and step are intentionally omitted (or set to a
+            neutral value).  The HTML min/step attributes cause jsdom to
+            normalise the input's value on blur — e.g. "0" becomes "0.01"
+            when min="0.01" — which would silently bypass our JS validation.
+            All amount constraints are enforced by the handleSubmit guard above.
+        */}
         <input
           type="number"
           placeholder="Amount"
           value={amount}
-          min="0.01"
-          step="0.01"
           onChange={(e) => setAmount(e.target.value)}
           className="w-full mb-3 bg-inputBg border border-border rounded-lg px-3 py-2"
         />
