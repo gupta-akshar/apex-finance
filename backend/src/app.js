@@ -3,6 +3,10 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import pinoHttp from "pino-http";
+import { randomUUID } from "crypto";
+
+import logger from "./config/logger.js";
 
 import authRoutes from "./routes/auth.routes.js";
 import transactionRoutes from "./routes/transaction.routes.js";
@@ -33,11 +37,10 @@ app.set("etag", false);
 app.set("trust proxy", 1);
 
 // ─── Helmet — security headers + CSP ─────────────────────────────────────────
-
 const clientOrigin = process.env.CLIENT_URL || "http://localhost:5173";
 const clientHost = (() => {
   try {
-    return new URL(clientOrigin).host; // e.g. "localhost:5173" or "app.example.com"
+    return new URL(clientOrigin).host;
   } catch {
     return "localhost:5173";
   }
@@ -47,52 +50,35 @@ app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
-        // ── Fetch directives ────────────────────────────────────────────────
         defaultSrc: ["'self'"],
-
         scriptSrc: ["'self'", "'unsafe-inline'"],
-
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-
         imgSrc: ["'self'", "data:"],
-
         connectSrc: [
           "'self'",
-
           `http://${clientHost}`,
           `https://${clientHost}`,
-
           `ws://${clientHost}`,
           `wss://${clientHost}`,
-
           "http://localhost:5000",
           "https://localhost:5000",
         ],
-
         fontSrc: [
           "'self'",
-
           "https://fonts.gstatic.com",
           "https://fonts.googleapis.com",
         ],
-
         frameAncestors: ["'none'"],
-
         upgradeInsecureRequests: [],
       },
     },
-
     frameguard: { action: "deny" },
-
     noSniff: true,
-
     xssFilter: true,
-
     hsts:
       process.env.NODE_ENV === "production"
         ? { maxAge: 31_536_000, includeSubDomains: true, preload: true }
         : false,
-
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   }),
 );
@@ -102,6 +88,56 @@ app.use(
   cors({
     origin: clientOrigin,
     credentials: true,
+  }),
+);
+
+// ─── Request logging (pino-http) ──────────────────────────────────────────────
+
+app.use(
+  pinoHttp({
+    logger,
+
+    // ── Correlation ID ───────────────────────────────────────────────────────
+
+    genReqId: (req, res) => {
+      const forwarded = req.headers["x-request-id"];
+      if (forwarded) return forwarded;
+      const id = randomUUID();
+      res.setHeader("X-Request-Id", id);
+      return id;
+    },
+
+    // ── Log level by outcome ─────────────────────────────────────────────────
+
+    customLogLevel: (req, res, err) => {
+      if (req.url === "/api/health") return "silent";
+      if (err || res.statusCode >= 500) return "error";
+      if (res.statusCode >= 400) return "warn";
+      return "info";
+    },
+
+    // ── Request serialiser ───────────────────────────────────────────────────
+
+    serializers: {
+      req(req) {
+        return {
+          id: req.id,
+          method: req.method,
+          url: req.url,
+          // Omit the full headers object; only surface what aids debugging.
+          userAgent: req.headers?.["user-agent"],
+          remoteAddress: req.remoteAddress,
+        };
+      },
+      res(res) {
+        return { statusCode: res.statusCode };
+      },
+    },
+
+    customSuccessMessage: (req, res) =>
+      `${req.method} ${req.url} → ${res.statusCode}`,
+    customErrorMessage: (req, res, err) =>
+      `${req.method} ${req.url} → ${res.statusCode} (${err.message})`,
   }),
 );
 
