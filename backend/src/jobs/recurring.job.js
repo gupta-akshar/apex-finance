@@ -2,8 +2,21 @@ import cron from "node-cron";
 import RecurringTransaction from "../models/RecurringTransaction.js";
 import Transaction from "../models/Transaction.js";
 
+// ─── Concurrency guard ────────────────────────────────────────────────────────
+
+let isRunning = false;
+
 export const startRecurringJob = () => {
   cron.schedule("0 0 * * *", async () => {
+    // ── Overlap guard ─────────────────────────────────────────────────────────
+    if (isRunning) {
+      console.warn(
+        "[recurring-job] Previous execution still in progress — skipping this tick.",
+      );
+      return;
+    }
+
+    isRunning = true;
     console.log("Running recurring transactions job…");
 
     const _now = new Date();
@@ -19,7 +32,7 @@ export const startRecurringJob = () => {
 
     const bulkOps = [];
 
-    // ── Fetch candidates via cursor (avoids loading all docs into memory) ────
+    // ── Fetch candidates via cursor (avoids loading all docs into memory) ─────
     let cursor;
     try {
       cursor = RecurringTransaction.find({
@@ -29,15 +42,16 @@ export const startRecurringJob = () => {
         .sort({ _id: 1 })
         .cursor();
     } catch (fetchErr) {
-      console.error("Recurring job: failed to open cursor:", fetchErr.message);
+      console.error("[recurring-job] Failed to open cursor:", fetchErr.message);
+      isRunning = false; // always release the lock
       return;
     }
 
-    // ── Process each rule ─────────────────────────────────────────────────────
+    // ── Process each rule ──────────────────────────────────────────────────────
     try {
       for await (const item of cursor) {
         try {
-          // ── Respect endDate ────────────────────────────────────────────────
+          // ── Respect endDate ──────────────────────────────────────────────────
           if (item.endDate) {
             const _ed = new Date(item.endDate);
             const end = new Date(
@@ -109,7 +123,7 @@ export const startRecurringJob = () => {
             continue;
           }
 
-          // ── IDEMPOTENCY CHECK ──────────────────────────────────────────────
+          // ── IDEMPOTENCY CHECK ────────────────────────────────────────────────
           const existingTx = await Transaction.exists({
             sourceRecurringId: item._id,
             date: { $gte: today, $lt: tomorrow },
@@ -130,7 +144,7 @@ export const startRecurringJob = () => {
             continue;
           }
 
-          // ── CREATE TRANSACTION ─────────────────────────────────────────────
+          // ── CREATE TRANSACTION ───────────────────────────────────────────────
           await Transaction.create({
             user: item.user,
             type: item.type,
@@ -141,7 +155,7 @@ export const startRecurringJob = () => {
             sourceRecurringId: item._id,
           });
 
-          // Queue lastExecuted update – no immediate DB round-trip.
+          // Queue lastExecuted update — no immediate DB round-trip.
           bulkOps.push({
             updateOne: {
               filter: { _id: item._id },
@@ -178,24 +192,29 @@ export const startRecurringJob = () => {
         }
       }
     } finally {
+      // Always close the cursor …
       await cursor.close();
-    }
 
-    if (bulkOps.length > 0) {
-      try {
-        await RecurringTransaction.bulkWrite(bulkOps, { ordered: false });
-      } catch (bulkErr) {
-        console.error(
-          `Recurring job: bulkWrite failed (${bulkOps.length} ops): ` +
-            bulkErr.message,
-        );
+      // … flush any queued bulk updates …
+      if (bulkOps.length > 0) {
+        try {
+          await RecurringTransaction.bulkWrite(bulkOps, { ordered: false });
+        } catch (bulkErr) {
+          console.error(
+            `[recurring-job] bulkWrite failed (${bulkOps.length} ops): ` +
+              bulkErr.message,
+          );
+        }
       }
-    }
 
-    console.log(
-      `Recurring job complete — ` +
-        `processed: ${processed}, skipped: ${skipped}, ` +
-        `recovered: ${recovered}, failed: ${failed}`,
-    );
+      // … and release the lock so the next cron tick can proceed.
+      isRunning = false;
+
+      console.log(
+        `Recurring job complete — ` +
+          `processed: ${processed}, skipped: ${skipped}, ` +
+          `recovered: ${recovered}, failed: ${failed}`,
+      );
+    }
   });
 };
