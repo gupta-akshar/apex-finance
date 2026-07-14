@@ -27,10 +27,12 @@ const Sidebar = () => {
       ].join(" ")}
     >
       {/* Brand */}
-      <div className="px-5 py-5 border-b border-border shrink-0">
-        <span className="text-base font-bold tracking-tight text-primaryText">
-          💸 ExpenseTracker
-        </span>
+      <div className="px-5 py-4 border-b border-border shrink-0">
+        <img
+          src="/sidebar.svg"
+          alt="ExpenseTracker Logo"
+          className="h-10 w-auto"
+        />
       </div>
 
       {/* Nav */}
