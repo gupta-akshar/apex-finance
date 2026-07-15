@@ -1,30 +1,28 @@
-// middlewares/validate.middleware.js
-
-/**
- * Validation middleware factory.
- *
- * @param {import("joi").Schema} schema - Joi schema to validate against
- * @param {"body"|"query"} source       - Which part of the request to validate.
- *                                        GET routes pass query-string params so
- *                                        use "query"; POST/PUT routes use "body".
- */
 export const validate =
   (schema, source = "body") =>
   (req, res, next) => {
     const data = source === "query" ? req.query : req.body;
 
-    const { error } = schema.validate(data, {
+    const { error, value } = schema.validate(data, {
       abortEarly: false,
       allowUnknown: source === "query",
+
+      stripUnknown: source === "query",
     });
 
     if (error) {
-      const messages = error.details.map((err) => err.message);
-
+      const messages = error.details.map((d) => d.message);
       return res.status(400).json({
         success: false,
-        errors: messages,
+        message: messages[0], // first message as a plain string (matches controller shape)
+        errors: messages, // full array for programmatic / test consumers
       });
+    }
+
+    if (source === "query") {
+      req.query = value;
+    } else {
+      req.body = value;
     }
 
     next();
