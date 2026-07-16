@@ -56,6 +56,12 @@ const recurringTransactionSchema = new mongoose.Schema(
       default: "",
     },
 
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "upi", "card", "bank"],
+      default: "bank",
+    },
+
     lastExecuted: {
       type: Date,
       default: null,
@@ -67,6 +73,18 @@ const recurringTransactionSchema = new mongoose.Schema(
     },
   },
   { timestamps: true },
+);
+
+// ─── Indexes ──────────────────────────────────────────────────────────────────
+
+recurringTransactionSchema.index(
+  { isActive: 1, startDate: 1 },
+  { name: "recurring_cron_query_idx" },
+);
+
+recurringTransactionSchema.index(
+  { user: 1, createdAt: -1 },
+  { name: "recurring_user_list_idx" },
 );
 
 export default mongoose.model(

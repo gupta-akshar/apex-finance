@@ -2,22 +2,19 @@ import cron from "node-cron";
 import RecurringTransaction from "../models/RecurringTransaction.js";
 import Transaction from "../models/Transaction.js";
 
-// ─── Concurrency guard ────────────────────────────────────────────────────────
-
 let isRunning = false;
 
 export const startRecurringJob = () => {
   cron.schedule("0 0 * * *", async () => {
-    // ── Overlap guard ─────────────────────────────────────────────────────────
     if (isRunning) {
       console.warn(
-        "[recurring-job] Previous execution still in progress — skipping this tick.",
+        "[recurring-job] Previous run still in progress — skipping tick.",
       );
       return;
     }
 
     isRunning = true;
-    console.log("Running recurring transactions job…");
+    console.log("[recurring-job] Starting…");
 
     const _now = new Date();
     const today = new Date(
@@ -25,14 +22,12 @@ export const startRecurringJob = () => {
     );
     const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
 
-    let processed = 0;
-    let skipped = 0;
-    let recovered = 0;
-    let failed = 0;
-
+    let processed = 0,
+      skipped = 0,
+      recovered = 0,
+      failed = 0;
     const bulkOps = [];
 
-    // ── Fetch candidates via cursor (avoids loading all docs into memory) ─────
     let cursor;
     try {
       cursor = RecurringTransaction.find({
@@ -43,29 +38,27 @@ export const startRecurringJob = () => {
         .cursor();
     } catch (fetchErr) {
       console.error("[recurring-job] Failed to open cursor:", fetchErr.message);
-      isRunning = false; // always release the lock
+      isRunning = false;
       return;
     }
 
-    // ── Process each rule ──────────────────────────────────────────────────────
     try {
       for await (const item of cursor) {
         try {
-          // ── Respect endDate ──────────────────────────────────────────────────
+          // ── Respect endDate ──────────────────────────────────────────────
           if (item.endDate) {
-            const _ed = new Date(item.endDate);
+            const ed = new Date(item.endDate);
             const end = new Date(
               Date.UTC(
-                _ed.getUTCFullYear(),
-                _ed.getUTCMonth(),
-                _ed.getUTCDate(),
+                ed.getUTCFullYear(),
+                ed.getUTCMonth(),
+                ed.getUTCDate(),
                 23,
                 59,
                 59,
                 999,
               ),
             );
-
             if (today > end) {
               bulkOps.push({
                 updateOne: {
@@ -78,22 +71,20 @@ export const startRecurringJob = () => {
             }
           }
 
-          // ── Determine whether this rule is due today ───────────────────────
-          const _base = item.lastExecuted
+          // ── Is this rule due today? ──────────────────────────────────────
+          const base = item.lastExecuted
             ? new Date(item.lastExecuted)
             : new Date(item.startDate);
           const last = new Date(
             Date.UTC(
-              _base.getUTCFullYear(),
-              _base.getUTCMonth(),
-              _base.getUTCDate(),
+              base.getUTCFullYear(),
+              base.getUTCMonth(),
+              base.getUTCDate(),
             ),
           );
-
           const diffDays = Math.floor((today - last) / (1000 * 60 * 60 * 24));
 
           let shouldRun = false;
-
           switch (item.frequency) {
             case "daily":
               shouldRun = diffDays >= 1;
@@ -101,16 +92,12 @@ export const startRecurringJob = () => {
             case "weekly":
               shouldRun = diffDays >= 7;
               break;
-            case "monthly": {
-              const lastMonth = last.getUTCMonth();
-              const lastYear = last.getUTCFullYear();
-              const todayMonth = today.getUTCMonth();
-              const todayYear = today.getUTCFullYear();
+            case "monthly":
               shouldRun =
-                todayYear > lastYear ||
-                (todayYear === lastYear && todayMonth > lastMonth);
+                today.getUTCFullYear() > last.getUTCFullYear() ||
+                (today.getUTCFullYear() === last.getUTCFullYear() &&
+                  today.getUTCMonth() > last.getUTCMonth());
               break;
-            }
             case "yearly":
               shouldRun = today.getUTCFullYear() > last.getUTCFullYear();
               break;
@@ -123,7 +110,7 @@ export const startRecurringJob = () => {
             continue;
           }
 
-          // ── IDEMPOTENCY CHECK ────────────────────────────────────────────────
+          // ── Idempotency check ────────────────────────────────────────────
           const existingTx = await Transaction.exists({
             sourceRecurringId: item._id,
             date: { $gte: today, $lt: tomorrow },
@@ -138,13 +125,13 @@ export const startRecurringJob = () => {
             });
             recovered++;
             console.log(
-              `  ↻ Recovered "${item.title || item._id}" — ` +
-                `tx existed from previous run, synced lastExecuted`,
+              `  ↻ Recovered "${item.title || item._id}" — tx existed, synced lastExecuted`,
             );
             continue;
           }
 
-          // ── CREATE TRANSACTION ───────────────────────────────────────────────
+          // ── Create transaction ───────────────────────────────────────────
+
           await Transaction.create({
             user: item.user,
             type: item.type,
@@ -152,21 +139,19 @@ export const startRecurringJob = () => {
             category: item.category,
             note: item.note || "",
             date: today,
+            paymentMethod: item.paymentMethod || "bank",
             sourceRecurringId: item._id,
           });
 
-          // Queue lastExecuted update — no immediate DB round-trip.
           bulkOps.push({
             updateOne: {
               filter: { _id: item._id },
               update: { $set: { lastExecuted: today } },
             },
           });
-
           processed++;
           console.log(
-            `  ✓ Posted recurring "${item.title || item._id}" ` +
-              `for user ${item.user}`,
+            `  ✓ Posted "${item.title || item._id}" for user ${item.user}`,
           );
         } catch (err) {
           if (err.code === 11000) {
@@ -178,42 +163,41 @@ export const startRecurringJob = () => {
             });
             recovered++;
             console.log(
-              `  ↻ Duplicate prevented for "${item.title || item._id}" ` +
-                `(unique index blocked second insert)`,
+              `  ↻ Duplicate blocked (unique index) for "${item.title || item._id}"`,
             );
             continue;
           }
-
           failed++;
           console.error(
-            `  ✗ Error processing recurring item ${item._id} ` +
-              `"${item.title || ""}": ${err.message}`,
+            `  ✗ Error on ${item._id} "${item.title || ""}": ${err.message}`,
           );
         }
       }
     } finally {
-      // Always close the cursor …
-      await cursor.close();
+      try {
+        await cursor.close();
+      } catch (closeErr) {
+        console.error(
+          "[recurring-job] cursor.close() failed (non-fatal):",
+          closeErr.message,
+        );
+      }
 
-      // … flush any queued bulk updates …
       if (bulkOps.length > 0) {
         try {
           await RecurringTransaction.bulkWrite(bulkOps, { ordered: false });
         } catch (bulkErr) {
           console.error(
-            `[recurring-job] bulkWrite failed (${bulkOps.length} ops): ` +
-              bulkErr.message,
+            `[recurring-job] bulkWrite failed (${bulkOps.length} ops):`,
+            bulkErr.message,
           );
         }
       }
 
-      // … and release the lock so the next cron tick can proceed.
+      // GUARANTEED to run regardless of what threw above.
       isRunning = false;
-
       console.log(
-        `Recurring job complete — ` +
-          `processed: ${processed}, skipped: ${skipped}, ` +
-          `recovered: ${recovered}, failed: ${failed}`,
+        `[recurring-job] Done — processed:${processed} skipped:${skipped} recovered:${recovered} failed:${failed}`,
       );
     }
   });

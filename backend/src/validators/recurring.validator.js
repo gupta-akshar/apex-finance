@@ -1,7 +1,5 @@
 import Joi from "joi";
 
-// ─── Reusable field definitions ───────────────────────────────────────────────
-
 const objectId = Joi.string()
   .pattern(/^[a-f\d]{24}$/i)
   .message("category must be a valid ObjectId");
@@ -12,25 +10,31 @@ const frequency = Joi.string()
     "any.only": "frequency must be one of: daily, weekly, monthly, yearly",
   });
 
-const type = Joi.string().valid("income", "expense").messages({
-  "any.only": "type must be either 'income' or 'expense'",
-});
+const type = Joi.string()
+  .valid("income", "expense")
+  .messages({ "any.only": "type must be either 'income' or 'expense'" });
 
 const amount = Joi.number().positive().messages({
   "number.base": "amount must be a number",
   "number.positive": "amount must be a positive number",
 });
 
-const startDate = Joi.date().messages({
-  "date.base": "startDate must be a valid date",
-});
+const startDate = Joi.date()
+  .iso()
+  .messages({ "date.format": "startDate must be an ISO 8601 date string" });
 
-const endDate = Joi.date().greater(Joi.ref("startDate")).messages({
-  "date.base": "endDate must be a valid date",
+const endDate = Joi.date().iso().greater(Joi.ref("startDate")).messages({
+  "date.format": "endDate must be an ISO 8601 date string",
   "date.greater": "endDate must be after startDate",
 });
 
-// ─── Create schema — all required fields enforced ─────────────────────────────
+const paymentMethod = Joi.string()
+  .valid("cash", "upi", "card", "bank")
+  .messages({
+    "any.only": "paymentMethod must be one of: cash, upi, card, bank",
+  });
+
+// ─── Create schema ────────────────────────────────────────────────────────────
 
 export const createRecurringSchema = Joi.object({
   title: Joi.string().max(60).allow("").default(""),
@@ -48,7 +52,6 @@ export const createRecurringSchema = Joi.object({
   category: objectId.required().messages({
     ...objectId.describe().messages,
     "any.required": "category is required",
-    "string.pattern.base": "category must be a valid ObjectId",
   }),
 
   frequency: frequency.required().messages({
@@ -65,35 +68,26 @@ export const createRecurringSchema = Joi.object({
 
   note: Joi.string().max(100).allow("").default(""),
 
+  paymentMethod: paymentMethod.optional().default("bank"),
+
   isActive: Joi.boolean().default(true),
 });
 
-// ─── Update schema — all fields optional, at least one must be present ────────
+// ─── Update schema ────────────────────────────────────────────────────────────
 
 export const updateRecurringSchema = Joi.object({
   title: Joi.string().max(60).allow(""),
-
   type,
-
   amount,
-
-  category: objectId.messages({
-    "string.pattern.base": "category must be a valid ObjectId",
-  }),
-
+  category: objectId,
   frequency,
-
   startDate,
-
-  endDate: Joi.date().messages({
-    "date.base": "endDate must be a valid date",
-  }),
-
+  endDate: Joi.date()
+    .iso()
+    .messages({ "date.format": "endDate must be an ISO 8601 date string" }),
   note: Joi.string().max(100).allow(""),
-
+  paymentMethod, // FIX M8: allow updating paymentMethod
   isActive: Joi.boolean(),
 })
   .min(1)
-  .messages({
-    "object.min": "At least one field must be provided to update",
-  });
+  .messages({ "object.min": "At least one field must be provided to update" });
