@@ -38,7 +38,7 @@ const transactionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
       validate: {
-        validator: function (value) {
+        validator(value) {
           return value <= new Date();
         },
         message: "Date cannot be in the future",
@@ -51,8 +51,6 @@ const transactionSchema = new mongoose.Schema(
       default: "upi",
     },
 
-    // ─── Idempotency key ─────────────────────────────────────────────────────
-
     sourceRecurringId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "RecurringTransaction",
@@ -61,9 +59,9 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// ─── Indexes ─────────────────────────────────────────────────────────────────
+// ─── Indexes ──────────────────────────────────────────────────────────────────
 
-// Primary query: user + date (most common — list & sort by date)
+// Primary query: user + date (list / sort by date)
 transactionSchema.index({ user: 1, date: -1 });
 
 // Filter by type within a user
@@ -78,10 +76,10 @@ transactionSchema.index({ user: 1, type: 1, category: 1, date: -1 });
 // Amount-based sorting
 transactionSchema.index({ user: 1, amount: -1 });
 
-// createdAt-based ordering (fallback / admin)
+// createdAt-based ordering
 transactionSchema.index({ user: 1, createdAt: -1 });
 
-// ─── Idempotency index ────────────────────────────────────────────────────────
+// ── Idempotency index (cron job deduplication) ────────────────────────────────
 
 transactionSchema.index(
   { sourceRecurringId: 1, date: 1 },
@@ -89,15 +87,6 @@ transactionSchema.index(
     unique: true,
     partialFilterExpression: { sourceRecurringId: { $type: "objectId" } },
     name: "recurring_idempotency_idx",
-  },
-);
-
-transactionSchema.index(
-  { note: "text" },
-  {
-    sparse: true,
-    name: "transactions_note_text",
-    default_language: "english",
   },
 );
 

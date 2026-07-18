@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { TransactionContext } from "./TransactionContext";
 import {
   getTransactions,
@@ -6,10 +6,10 @@ import {
   deleteTransaction,
   updateTransaction,
 } from "../api/transactionApi";
-
 import { DEFAULT_FILTERS } from "../constants/transactionFilters";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
 const normalizeTransaction = (tx) => ({
   ...tx,
   categoryName:
@@ -23,6 +23,7 @@ const normalizeTransaction = (tx) => ({
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
+
 export const TransactionProvider = ({ children }) => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,13 +38,26 @@ export const TransactionProvider = ({ children }) => {
 
   const [filters, setFiltersState] = useState(DEFAULT_FILTERS);
 
-  // ── Fetch ────────────────────────────────────────────────────────────────
+  const abortRef = useRef(null);
+
+  // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchTransactions = useCallback(async () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       setLoading(true);
       setError(null);
 
-      const data = await getTransactions(filters);
+      const data = await getTransactions(filters, {
+        signal: controller.signal,
+      });
+
+      // If this request was superseded (aborted), do not update state.
+      if (controller.signal.aborted) return;
 
       const raw = data.transactions || [];
       setTransactions(raw.map(normalizeTransaction));
@@ -51,19 +65,36 @@ export const TransactionProvider = ({ children }) => {
         data.pagination ?? { total: 0, page: 1, pages: 1, limit: 10 },
       );
     } catch (err) {
+      if (
+        err?.name === "AbortError" ||
+        err?.name === "CanceledError" ||
+        err?.code === "ERR_CANCELED"
+      ) {
+        return;
+      }
       console.error("FETCH ERROR:", err);
       setError(err?.response?.data?.message || "Failed to load transactions.");
     } finally {
-      setLoading(false);
+      // Only clear loading if THIS request is still the active one.
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   }, [filters]);
 
-  // ── Auto-refetch when filters change ─────────────────────────────────────
+  // Abort on unmount to prevent state updates on an unmounted component.
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, []);
+
+  // Auto-refetch when filters change.
   useEffect(() => {
     fetchTransactions();
   }, [fetchTransactions]);
 
-  // ── setFilters ───────────────────────────────────────────────────────────
+  // ── setFilters ─────────────────────────────────────────────────────────────
   const setFilters = useCallback((updater) => {
     setFiltersState((prev) => {
       const next =
@@ -77,18 +108,17 @@ export const TransactionProvider = ({ children }) => {
     });
   }, []);
 
-  // ── Convenience: change page without resetting other filters ─────────────
+  // ── Convenience page setter ────────────────────────────────────────────────
   const setPage = useCallback((page) => {
     setFiltersState((prev) => ({ ...prev, page }));
   }, []);
 
-  // ── Reset all filters ─────────────────────────────────────────────────────
+  // ── Reset all filters ──────────────────────────────────────────────────────
   const resetFilters = useCallback(() => {
     setFiltersState(DEFAULT_FILTERS);
   }, []);
 
-  // ── ADD ──────────────────────────────────────────────────────────────────
-
+  // ── ADD ───────────────────────────────────────────────────────────────────
   const addTransaction = useCallback(
     async (tx) => {
       try {
@@ -113,9 +143,9 @@ export const TransactionProvider = ({ children }) => {
     async (id) => {
       try {
         await deleteTransaction(id);
-
+        // Optimistic UI: remove from local state immediately for responsiveness
         setTransactions((prev) => prev.filter((t) => t._id !== id));
-
+        // Then refetch to get accurate pagination totals
         await fetchTransactions();
       } catch (err) {
         console.error("DELETE ERROR:", err);
@@ -125,37 +155,41 @@ export const TransactionProvider = ({ children }) => {
     [fetchTransactions],
   );
 
-  // ── EDIT ──────────────────────────────────────────────────────────────────
+  const editTransaction = useCallback(
+    async (id, updatedData) => {
+      try {
+        const res = await updateTransaction(id, updatedData);
+        const updated = res.transaction || res;
+        const normalized = normalizeTransaction(updated);
 
-  const editTransaction = useCallback(async (id, updatedData) => {
-    try {
-      const res = await updateTransaction(id, updatedData);
-      const updated = res.transaction || res;
-      const normalized = normalizeTransaction(updated);
-      setTransactions((prev) =>
-        prev.map((t) => (t._id === id ? normalized : t)),
-      );
-      return normalized;
-    } catch (err) {
-      console.error("UPDATE ERROR:", err);
-      throw err;
-    }
-  }, []);
+        // Optimistic update: immediately reflect the change in the visible list
+        setTransactions((prev) =>
+          prev.map((t) => (t._id === id ? normalized : t)),
+        );
+
+        // Refetch to re-sort, re-paginate, and sync filter counts.
+        await fetchTransactions();
+
+        return normalized;
+      } catch (err) {
+        console.error("UPDATE ERROR:", err);
+        throw err;
+      }
+    },
+    [fetchTransactions],
+  );
 
   return (
     <TransactionContext.Provider
       value={{
-        // data
         transactions,
         loading,
         error,
         pagination,
-        // filter state
         filters,
         setFilters,
         setPage,
         resetFilters,
-        // CRUD
         addTransaction,
         removeTransaction,
         editTransaction,
