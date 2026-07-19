@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import CategoryContext from "./CategoryContext";
 import { getCategories } from "../api/categoryApi";
+import {
+  registerCategoryInvalidate,
+  unregisterCategoryInvalidate,
+} from "../hooks/useCategories";
 
 export const CategoryProvider = ({ children }) => {
   const [categories, setCategories] = useState([]);
@@ -8,6 +12,9 @@ export const CategoryProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   const mountedRef = useRef(true);
+  const abortRef = useRef(null);
+  const fetchIdRef = useRef(0);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -15,16 +22,11 @@ export const CategoryProvider = ({ children }) => {
     };
   }, []);
 
-  const abortRef = useRef(null);
-
-  const fetchIdRef = useRef(0);
-
   const fetchCategories = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort();
 
     const controller = new AbortController();
     abortRef.current = controller;
-
     const currentId = ++fetchIdRef.current;
 
     setLoading(true);
@@ -52,6 +54,11 @@ export const CategoryProvider = ({ children }) => {
       }
     }
   }, []);
+
+  useEffect(() => {
+    registerCategoryInvalidate(fetchCategories);
+    return () => unregisterCategoryInvalidate();
+  }, [fetchCategories]);
 
   useEffect(() => {
     fetchCategories();

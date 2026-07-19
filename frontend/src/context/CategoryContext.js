@@ -1,10 +1,5 @@
 import { createContext } from "react";
 
-const CategoryContext = createContext({
-  categories: [],
-  loading: false,
-  error: null,
-  invalidate: () => {},
-});
+const CategoryContext = createContext(null);
 
 export default CategoryContext;
