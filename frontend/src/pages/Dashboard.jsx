@@ -7,12 +7,8 @@ import SummaryCard from "../components/SummaryCard";
 import { ExpensePieChart, IncomeExpenseBarChart } from "../components/Chart";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useFonts from "../hooks/useFonts";
+import { ROUTES } from "../constants/routes.js";
 
-/* ─── Font injection ─────────────────────────────────────────────────────── */
-const FONT_HREF =
-  "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@300;400;500;600&display=swap";
-
-/* ─── Greeting helper ────────────────────────────────────────────────────── */
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning";
@@ -20,7 +16,6 @@ function greeting() {
   return "Good evening";
 }
 
-/* ─── Date chip ──────────────────────────────────────────────────────────── */
 function todayLabel() {
   return new Date().toLocaleDateString("en-IN", {
     weekday: "long",
@@ -30,7 +25,6 @@ function todayLabel() {
   });
 }
 
-/* ─── Format date for recent list ───────────────────────────────────────── */
 const fmtDate = (d) => {
   const date = new Date(d);
   const today = new Date();
@@ -41,7 +35,6 @@ const fmtDate = (d) => {
   return date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 };
 
-/* ─── Quick Action Button ────────────────────────────────────────────────── */
 const QABtn = ({ label, onClick, variant = "default", icon }) => {
   const styles = {
     income: {
@@ -54,15 +47,10 @@ const QABtn = ({ label, onClick, variant = "default", icon }) => {
       cls: "border-[#27272a] text-[#a1a1aa] hover:bg-[#1f1f23] hover:text-[#e4e4e7] hover:border-[#3f3f46]",
     },
   };
-
   return (
     <button
       onClick={onClick}
-      className={[
-        "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border",
-        "transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/40",
-        styles[variant]?.cls ?? styles.default.cls,
-      ].join(" ")}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/40 ${styles[variant]?.cls ?? styles.default.cls}`}
       style={{ fontFamily: "'Sora', sans-serif" }}
     >
       {icon && <span className="text-base leading-none">{icon}</span>}
@@ -71,17 +59,14 @@ const QABtn = ({ label, onClick, variant = "default", icon }) => {
   );
 };
 
-/* ─── Recent transaction row ─────────────────────────────────────────────── */
 const RecentRow = ({ tx }) => {
   const isIncome = tx.type === "income";
   const cat =
     tx.categoryName ||
     (typeof tx.category === "object" ? tx.category?.name : null) ||
     "Unknown";
-
   return (
     <div className="flex items-center justify-between py-2.5 border-b border-[#27272a]/50 last:border-0 group">
-      {/* Left: dot + category + date */}
       <div className="flex items-center gap-3 min-w-0">
         <span
           className="w-1.5 h-1.5 rounded-full shrink-0"
@@ -104,8 +89,6 @@ const RecentRow = ({ tx }) => {
           )}
         </div>
       </div>
-
-      {/* Right: amount + date */}
       <div className="flex items-center gap-4 shrink-0 ml-3">
         <span
           className="text-[11px] text-[#52525b]"
@@ -127,7 +110,6 @@ const RecentRow = ({ tx }) => {
   );
 };
 
-/* ─── Section label ──────────────────────────────────────────────────────── */
 const SectionLabel = ({ children }) => (
   <p
     className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#52525b] mb-3"
@@ -137,7 +119,6 @@ const SectionLabel = ({ children }) => (
   </p>
 );
 
-/* ─── Inline analytics error banner ─────────────────────────────────────── */
 const AnalyticsError = ({ message, onRetry }) => (
   <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-xl border border-red-500/20 bg-red-500/8 mb-4">
     <p
@@ -157,9 +138,6 @@ const AnalyticsError = ({ message, onRetry }) => (
   </div>
 );
 
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  DASHBOARD                                                                  */
-/* ═══════════════════════════════════════════════════════════════════════════ */
 const Dashboard = () => {
   useFonts();
   const navigate = useNavigate();
@@ -170,8 +148,6 @@ const Dashboard = () => {
     loading: recentLoading,
     refresh: refreshRecent,
   } = useRecentTransactions(5);
-
-  // ── Server-driven analytics ───────────────────────────────────────────────
 
   const {
     stats,
@@ -190,11 +166,7 @@ const Dashboard = () => {
     refreshRecent();
   };
 
-  // ── Combined loading state for the initial skeleton ───────────────────────
-
-  const isFirstLoad = analyticsLoading && stats.transactionsCount === 0;
-
-  if (isFirstLoad) {
+  if (analyticsLoading) {
     return (
       <div className="min-h-screen bg-[#0a0a0c] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -215,7 +187,6 @@ const Dashboard = () => {
       className="min-h-screen bg-[#0a0a0c] text-[#e4e4e7]"
       style={{ fontFamily: "'Sora', sans-serif" }}
     >
-      {/* ── Ambient background ── */}
       <div
         aria-hidden
         className="pointer-events-none fixed inset-0 overflow-hidden z-0"
@@ -230,11 +201,8 @@ const Dashboard = () => {
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-8 py-8 space-y-8">
-        {/* ══════════════════════════════════════════════════════════════════
-            HEADER
-        ══════════════════════════════════════════════════════════════════ */}
+        {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          {/* Left: greeting */}
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#52525b] mb-1">
               {todayLabel()}
@@ -247,8 +215,6 @@ const Dashboard = () => {
               {user?.name ? `, ${user.name.split(" ")[0]}` : ""} 👋
             </h1>
           </div>
-
-          {/* Right: quick actions */}
           <div className="flex items-center gap-2 flex-wrap">
             <QABtn
               icon="+"
@@ -262,27 +228,25 @@ const Dashboard = () => {
               variant="expense"
               onClick={() => setModalMode("expense")}
             />
+            {/* L5 fix: ROUTES constants instead of hardcoded strings */}
             <QABtn
               icon="↺"
               label="Recurring"
-              onClick={() => navigate("/recurring")}
+              onClick={() => navigate(ROUTES.RECURRING)}
             />
             <QABtn
               icon="→"
               label="All Transactions"
-              onClick={() => navigate("/transactions")}
+              onClick={() => navigate(ROUTES.TRANSACTIONS)}
             />
           </div>
         </div>
 
-        {/* ── Analytics error banner ── */}
         {analyticsError && (
           <AnalyticsError message={analyticsError} onRetry={refreshAnalytics} />
         )}
 
-        {/* ══════════════════════════════════════════════════════════════════
-            STATS CARDS  — server data via useDashboardAnalytics
-        ══════════════════════════════════════════════════════════════════ */}
+        {/* ── Stats cards ── */}
         <div>
           <SectionLabel>Overview</SectionLabel>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -307,17 +271,17 @@ const Dashboard = () => {
               icon="↓"
               sub="All time"
             />
-
-            {/* Transaction count card — navigates to full list */}
             <div
               className="relative rounded-xl overflow-hidden border border-[#27272a] hover:border-[#3f3f46] transition-all duration-200 group cursor-pointer"
               style={{
                 background: "linear-gradient(145deg, #18181b 0%, #141416 100%)",
               }}
-              onClick={() => navigate("/transactions")}
+              onClick={() => navigate(ROUTES.TRANSACTIONS)}
               role="button"
               tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && navigate("/transactions")}
+              onKeyDown={(e) =>
+                e.key === "Enter" && navigate(ROUTES.TRANSACTIONS)
+              }
             >
               <div
                 className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl"
@@ -335,13 +299,9 @@ const Dashboard = () => {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#71717a]">
                     Transactions
                   </p>
-                  {analyticsLoading ? (
-                    <span className="w-3 h-3 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <span className="text-base opacity-40 group-hover:opacity-70 transition-opacity">
-                      ◈
-                    </span>
-                  )}
+                  <span className="text-base opacity-40 group-hover:opacity-70 transition-opacity">
+                    ◈
+                  </span>
                 </div>
                 <p
                   className="text-2xl font-semibold tabular-nums leading-none text-[#a5b4fc]"
@@ -357,50 +317,22 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════════════════════════════
-            CHARTS + RECENT TRANSACTIONS
-        ══════════════════════════════════════════════════════════════════ */}
+        {/* ── Charts + Recent ── */}
         <div className="grid lg:grid-cols-3 gap-5">
-          {/* ── Charts (2/3 width) — server data ── */}
           <div className="lg:col-span-2 space-y-5">
             <SectionLabel>Analytics</SectionLabel>
-
-            {analyticsLoading ? (
-              /* Skeleton placeholders while refreshing after a new transaction */
-              <div className="space-y-5">
-                {[260, 260].map((h, i) => (
-                  <div
-                    key={i}
-                    className="rounded-xl border border-[#27272a] animate-pulse"
-                    style={{
-                      height: h,
-                      background: "linear-gradient(145deg,#18181b,#141416)",
-                    }}
-                  />
-                ))}
-              </div>
-            ) : (
-              <>
-                {/* Bar chart — full-year monthly breakdown from /analytics/trend */}
-                <IncomeExpenseBarChart data={monthlyData} />
-
-                {/* Pie chart — expense breakdown from /analytics/categories */}
-                <ExpensePieChart data={categoryData} />
-              </>
-            )}
+            <IncomeExpenseBarChart data={monthlyData} />
+            <ExpensePieChart data={categoryData} />
           </div>
 
-          {/* ── Recent Transactions (1/3 width) — paginated context is fine here ── */}
           <div className="flex flex-col">
             <SectionLabel>Recent Activity</SectionLabel>
-
             <div
               className="rounded-xl border border-[#27272a] overflow-hidden flex-1"
               style={{
                 background: "linear-gradient(145deg, #18181b 0%, #141416 100%)",
               }}
             >
-              {/* Panel header */}
               <div className="px-5 pt-5 pb-4 border-b border-[#27272a]/60 flex items-center justify-between">
                 <p
                   className="text-sm font-semibold text-[#e4e4e7]"
@@ -408,15 +340,14 @@ const Dashboard = () => {
                 >
                   Latest transactions
                 </p>
+                {/* L5 fix */}
                 <button
-                  onClick={() => navigate("/transactions")}
+                  onClick={() => navigate(ROUTES.TRANSACTIONS)}
                   className="text-[11px] text-[#6366f1] hover:text-[#818cf8] transition-colors font-medium"
                 >
                   View all →
                 </button>
               </div>
-
-              {/* Transaction rows */}
               <div className="px-5 py-3">
                 {recentLoading ? (
                   <div className="py-10 flex justify-center">
@@ -439,8 +370,6 @@ const Dashboard = () => {
                   recentTx.map((tx) => <RecentRow key={tx._id} tx={tx} />)
                 )}
               </div>
-
-              {/* Footer CTA */}
               {recentTx.length > 0 && (
                 <div className="px-5 pb-5 pt-1">
                   <button
@@ -455,9 +384,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════════════════════════════
-            QUICK LINKS ROW
-        ══════════════════════════════════════════════════════════════════ */}
+        {/* ── Quick access ── */}
         <div>
           <SectionLabel>Quick access</SectionLabel>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -465,25 +392,25 @@ const Dashboard = () => {
               {
                 icon: "↕",
                 label: "Transactions",
-                to: "/transactions",
+                to: ROUTES.TRANSACTIONS,
                 accent: "#6366f1",
               },
               {
                 icon: "◈",
                 label: "Categories",
-                to: "/categories",
+                to: ROUTES.CATEGORIES,
                 accent: "#a78bfa",
               },
               {
                 icon: "◉",
                 label: "Reports",
-                to: "/reports",
+                to: ROUTES.REPORTS,
                 accent: "#4ade80",
               },
               {
                 icon: "↺",
                 label: "Recurring",
-                to: "/recurring",
+                to: ROUTES.RECURRING,
                 accent: "#facc15",
               },
             ].map((item) => (
@@ -498,10 +425,7 @@ const Dashboard = () => {
               >
                 <span
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0 border border-[#27272a] transition-colors duration-150 group-hover:border-[#3f3f46]"
-                  style={{
-                    background: `${item.accent}15`,
-                    color: item.accent,
-                  }}
+                  style={{ background: `${item.accent}15`, color: item.accent }}
                 >
                   {item.icon}
                 </span>
@@ -517,7 +441,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ── Transaction Modal ── */}
       {modalMode && (
         <TransactionModal mode={modalMode} onClose={handleModalClose} />
       )}

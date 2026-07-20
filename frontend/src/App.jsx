@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { CategoryProvider } from "./context/CategoryProvider.jsx";
 import { TransactionProvider } from "./context/TransactionProvider.jsx";
 import { useAuth } from "./hooks/useAuth";
+import { ROUTES } from "./constants/routes.js";
 
 import Layout from "./layout/Layout";
 
@@ -15,56 +16,41 @@ import Categories from "./pages/Categories";
 import Reports from "./pages/Reports";
 import Recurring from "./pages/Recurring";
 
-const LoadingScreen = () => {
-  return (
-    <div className="h-screen flex items-center justify-center text-lg font-medium">
-      Loading...
-    </div>
-  );
-};
+const LoadingScreen = () => (
+  <div className="h-screen flex items-center justify-center bg-background text-primaryText text-lg font-medium">
+    Loading…
+  </div>
+);
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
-
-  // Wait until auth check finishes
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
-  // Redirect if not authenticated
-  return user ? children : <Navigate to="/login" replace />;
+  if (loading) return <LoadingScreen />;
+  return user ? children : <Navigate to={ROUTES.LOGIN} replace />;
 };
 
 const PublicRoute = ({ children }) => {
   const { user, loading } = useAuth();
-
-  // Wait until auth check finishes
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
-  // Redirect authenticated users away from auth pages
-  return user ? <Navigate to="/dashboard" replace /> : children;
+  if (loading) return <LoadingScreen />;
+  return user ? <Navigate to={ROUTES.DASHBOARD} replace /> : children;
 };
 
 function App() {
   return (
     <Routes>
       {/* Landing */}
-      <Route path="/" element={<LandingPage />} />
+      <Route path={ROUTES.HOME} element={<LandingPage />} />
 
-      {/* Public Routes */}
+      {/* Public (unauthenticated) routes */}
       <Route
-        path="/login"
+        path={ROUTES.LOGIN}
         element={
           <PublicRoute>
             <Login />
           </PublicRoute>
         }
       />
-
       <Route
-        path="/register"
+        path={ROUTES.REGISTER}
         element={
           <PublicRoute>
             <Register />
@@ -72,7 +58,7 @@ function App() {
         }
       />
 
-      {/* Protected Routes */}
+      {/* Protected routes — wrapped in CategoryProvider + TransactionProvider */}
       <Route
         element={
           <ProtectedRoute>
@@ -84,19 +70,15 @@ function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/dashboard" element={<Dashboard />} />
-
-        <Route path="/transactions" element={<Transactions />} />
-
-        <Route path="/categories" element={<Categories />} />
-
-        <Route path="/reports" element={<Reports />} />
-
-        <Route path="/recurring" element={<Recurring />} />
+        <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
+        <Route path={ROUTES.TRANSACTIONS} element={<Transactions />} />
+        <Route path={ROUTES.CATEGORIES} element={<Categories />} />
+        <Route path={ROUTES.REPORTS} element={<Reports />} />
+        <Route path={ROUTES.RECURRING} element={<Recurring />} />
       </Route>
 
       {/* Catch-all */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>
   );
 }

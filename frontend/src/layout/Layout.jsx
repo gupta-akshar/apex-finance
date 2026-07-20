@@ -6,8 +6,10 @@ const Layout = () => {
     <div className="bg-background text-primaryText min-h-screen">
       <Sidebar />
 
-      <main className="ml-64 min-h-screen overflow-y-auto">
-        <Outlet />
+      <main className="lg:ml-64 min-h-screen overflow-y-auto">
+        <div className="pt-0 lg:pt-0">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
