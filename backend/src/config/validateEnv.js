@@ -1,12 +1,20 @@
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// config/validateEnv.js
+
+/**
+ * FIXES APPLIED:
+ *  H7 — CLIENT_URL is now REQUIRED, not just validated when present.
+ *       Previously, omitting CLIENT_URL silently fell back to localhost:5173
+ *       in production, making the CORS policy permissive for the wrong origin.
+ *  M9 — BCRYPT_ROUNDS is now validated to be an integer >= 10.
+ *       Previously BCRYPT_ROUNDS=1 was accepted, producing hashes crackable
+ *       in microseconds (cost factor 1 takes ~0.001 ms vs ~100 ms at factor 12).
+ */
 
 const isValidOrigin = (value) => {
   if (typeof value !== "string" || value.trim() === "") return false;
   try {
     const url = new URL(value);
-    // Only http and https schemes are accepted.
     if (!["http:", "https:"].includes(url.protocol)) return false;
-    // The value must be a bare origin — no path, search, or hash.
     if (url.pathname !== "/") return false;
     if (url.search !== "") return false;
     if (url.hash !== "") return false;
@@ -15,8 +23,6 @@ const isValidOrigin = (value) => {
     return false;
   }
 };
-
-// ─── Main validation ──────────────────────────────────────────────────────────
 
 export const validateEnv = () => {
   const errors = [];
@@ -33,7 +39,6 @@ export const validateEnv = () => {
   ) {
     errors.push("JWT_ACCESS_SECRET must be at least 32 characters.");
   }
-
   if (
     !process.env.JWT_REFRESH_SECRET ||
     process.env.JWT_REFRESH_SECRET.length < 32
@@ -44,7 +49,7 @@ export const validateEnv = () => {
   // ── PORT ───────────────────────────────────────────────────────────────────
   if (process.env.PORT !== undefined) {
     if (!/^\d+$/.test(process.env.PORT)) {
-      errors.push(`PORT must be a numeric value (got: "${process.env.PORT}").`);
+      errors.push(`PORT must be numeric (got: "${process.env.PORT}").`);
     } else {
       const port = Number(process.env.PORT);
       if (port < 1 || port > 65535) {
@@ -55,18 +60,36 @@ export const validateEnv = () => {
     }
   }
 
-  // ── CLIENT_URL ─────────────────────────────────────────────────────────────
-  if (process.env.CLIENT_URL !== undefined) {
-    if (!isValidOrigin(process.env.CLIENT_URL)) {
+  // ── CLIENT_URL — FIX H7: now required, not just conditionally validated ────
+  // Previously: if (process.env.CLIENT_URL !== undefined) { ... }
+  // If CLIENT_URL was absent, app.js would fall back to "http://localhost:5173"
+  // in production, opening CORS to the wrong origin.
+  if (!isValidOrigin(process.env.CLIENT_URL)) {
+    errors.push(
+      `CLIENT_URL is required and must be a valid http/https origin with no ` +
+        `trailing slash (got: "${process.env.CLIENT_URL ?? "undefined"}"). ` +
+        `Example: "https://app.example.com"`,
+    );
+  }
+
+  // ── BCRYPT_ROUNDS — FIX M9: enforce minimum safe cost factor ──────────────
+  // Previously there was no check at all. BCRYPT_ROUNDS=1 would be accepted,
+  // producing hashes that are crackable in under a millisecond.
+  if (process.env.BCRYPT_ROUNDS !== undefined) {
+    const rounds = Number(process.env.BCRYPT_ROUNDS);
+    if (!Number.isInteger(rounds) || rounds < 10) {
       errors.push(
-        `CLIENT_URL must be a valid http/https origin with no trailing slash ` +
-          `(got: "${process.env.CLIENT_URL}"). ` +
-          `Example: "http://localhost:5173" or "https://app.example.com".`,
+        `BCRYPT_ROUNDS must be an integer >= 10 for adequate security ` +
+          `(got: "${process.env.BCRYPT_ROUNDS}"). Recommended: 12 for production.`,
+      );
+    }
+    if (rounds > 20) {
+      errors.push(
+        `BCRYPT_ROUNDS > 20 will cause login to time out. Max recommended is 14.`,
       );
     }
   }
 
-  // ── Throw on first failure ─────────────────────────────────────────────────
   if (errors.length > 0) {
     throw new Error(
       `\n\nEnvironment validation failed:\n  • ${errors.join("\n  • ")}\n`,
