@@ -35,9 +35,8 @@ export const getMonthlySummaryService = async (userId, month, year) => {
     },
   ]);
 
-  let income = 0;
-  let expense = 0;
-
+  let income = 0,
+    expense = 0;
   result.forEach((item) => {
     if (item._id === "income") income = item.total;
     if (item._id === "expense") expense = item.total;
@@ -84,10 +83,7 @@ export const getCategoryBreakdownService = async (
       },
     },
     {
-      $unwind: {
-        path: "$categoryDoc",
-        preserveNullAndEmptyArrays: true,
-      },
+      $unwind: { path: "$categoryDoc", preserveNullAndEmptyArrays: true },
     },
     {
       $group: {
