@@ -19,6 +19,7 @@ router.use(protect);
 router.get("/profile", getUserProfile);
 router.put("/profile", validate(updateProfileSchema), updateUserProfile);
 router.put("/change-password", validate(changePasswordSchema), changePassword);
-router.delete("/", deleteAccount);
+
+router.post("/close-account", deleteAccount);
 
 export default router;

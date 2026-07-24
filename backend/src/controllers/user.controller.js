@@ -6,8 +6,6 @@ import Category from "../models/Category.js";
 import Budget from "../models/Budget.js";
 import RecurringTransaction from "../models/RecurringTransaction.js";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 const isProd = process.env.NODE_ENV === "production";
 
 const isTransactionUnsupportedError = (err) =>
@@ -22,6 +20,7 @@ const deleteUserData = async (userId, session) => {
   await Category.deleteMany({ user: userId }, opts);
   await Budget.deleteMany({ user: userId }, opts);
   await RecurringTransaction.deleteMany({ user: userId }, opts);
+
   await User.findByIdAndDelete(userId, opts);
 };
 
@@ -32,7 +31,6 @@ const deleteUserData = async (userId, session) => {
 export const getUserProfile = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id).select("-password");
-
     res.status(200).json(user);
   } catch (error) {
     next(error);
@@ -46,7 +44,6 @@ export const updateUserProfile = async (req, res, next) => {
     const { name, currency } = req.body;
 
     const user = await User.findById(req.user._id);
-
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -55,7 +52,6 @@ export const updateUserProfile = async (req, res, next) => {
     if (currency) user.currency = currency;
 
     const updatedUser = await user.save();
-
     res.status(200).json({
       _id: updatedUser._id,
       name: updatedUser.name,
@@ -90,7 +86,6 @@ export const changePassword = async (req, res, next) => {
     user.refreshToken = null;
     await user.save();
 
-    // ── Clear the refresh token cookie ────────────────────────────────────
     res
       .clearCookie("refreshToken", {
         httpOnly: true,
@@ -104,15 +99,16 @@ export const changePassword = async (req, res, next) => {
   }
 };
 
-// @route   DELETE /api/users
+// @route   POST /api/users/close-account
 // @access  Private
+
 export const deleteAccount = async (req, res, next) => {
   const { currentPassword } = req.body;
 
   if (!currentPassword) {
-    return res
-      .status(400)
-      .json({ message: "currentPassword is required to delete your account" });
+    return res.status(400).json({
+      message: "currentPassword is required to delete your account",
+    });
   }
 
   let user;
@@ -132,7 +128,6 @@ export const deleteAccount = async (req, res, next) => {
   }
 
   const userId = req.user._id;
-
   const session = await mongoose.startSession();
 
   try {
@@ -144,8 +139,9 @@ export const deleteAccount = async (req, res, next) => {
 
     if (isTransactionUnsupportedError(txError)) {
       console.warn(
-        "[deleteAccount] Transactions not supported — " +
-          "falling back to sequential deletes (standalone MongoDB detected).",
+        "[deleteAccount] Falling back to sequential deletes " +
+          "(standalone MongoDB detected — no replica set). " +
+          "For full atomicity, run MongoDB as a replica set.",
       );
 
       try {
@@ -154,14 +150,12 @@ export const deleteAccount = async (req, res, next) => {
         return next(fallbackError);
       }
     } else {
-      // Unexpected error — propagate to the global error handler
       return next(txError);
     }
   } finally {
     await session.endSession();
   }
 
-  // ── Step 3: clear auth state and respond ──────────────────────────────────
   res
     .clearCookie("refreshToken", {
       httpOnly: true,
