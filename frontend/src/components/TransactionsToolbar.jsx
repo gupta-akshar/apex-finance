@@ -2,9 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useTransactions } from "../hooks/useTransactions";
 import { DEFAULT_FILTERS } from "../constants/transactionFilters.js";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Count how many non-default advanced filter values are active */
 const countAdvancedActive = (filters) => {
   const advanced = ["category", "month", "year", "startDate", "endDate"];
   return advanced.filter((k) => filters[k] && filters[k] !== DEFAULT_FILTERS[k])
@@ -14,37 +11,26 @@ const countAdvancedActive = (filters) => {
 const selectCls =
   "bg-inputBg border border-border rounded-lg px-3 py-1.5 text-sm text-primaryText focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition";
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 const TransactionsToolbar = ({ showAdvanced, onToggleAdvanced }) => {
   const { filters, setFilters, resetFilters } = useTransactions();
 
-  // Debounced search local state
   const [searchInput, setSearchInput] = useState(filters.search || "");
-
-  // Scroll-based compactness
   const [isScrolled, setIsScrolled] = useState(false);
 
-  // The scrollable main element is `ml-64 overflow-y-auto` — we listen on
-  // the window scroll since the whole page scrolls inside main.
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 48);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Sync local search → context with 400ms debounce
   useEffect(() => {
     const t = setTimeout(() => {
-      if (searchInput !== filters.search) {
-        setFilters({ search: searchInput });
-      }
+      setFilters({ search: searchInput });
     }, 400);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput]);
+  }, [searchInput, setFilters]);
 
-  // Keep local search in sync if filters reset externally
+  // Keep local input in sync if filters are reset externally (e.g. "Clear" button).
   useEffect(() => {
     setSearchInput(filters.search || "");
   }, [filters.search]);
@@ -64,18 +50,11 @@ const TransactionsToolbar = ({ showAdvanced, onToggleAdvanced }) => {
   return (
     <div
       className={[
-        "sticky top-0 z-10 bg-background/95 backdrop-blur-sm",
-        "border-b border-border",
-        "transition-all duration-200",
+        "sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border transition-all duration-200",
         isScrolled ? "py-2 shadow-lg shadow-black/20" : "py-4",
       ].join(" ")}
     >
-      <div
-        className={[
-          "flex flex-wrap items-center gap-2",
-          isScrolled ? "px-6" : "px-6",
-        ].join(" ")}
-      >
+      <div className="flex flex-wrap items-center gap-2 px-6">
         {/* ── Search ── */}
         <div className="relative flex-1 min-w-[180px] max-w-xs">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-secondaryText text-xs pointer-events-none">
@@ -86,12 +65,7 @@ const TransactionsToolbar = ({ showAdvanced, onToggleAdvanced }) => {
             placeholder="Search transactions…"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className={[
-              "w-full pl-7 pr-3 py-1.5 text-sm rounded-lg",
-              "bg-inputBg border border-border text-primaryText",
-              "placeholder:text-secondaryText",
-              "focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition",
-            ].join(" ")}
+            className="w-full pl-7 pr-3 py-1.5 text-sm rounded-lg bg-inputBg border border-border text-primaryText placeholder:text-secondaryText focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition"
           />
         </div>
 
@@ -122,8 +96,7 @@ const TransactionsToolbar = ({ showAdvanced, onToggleAdvanced }) => {
         <button
           onClick={onToggleAdvanced}
           className={[
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium",
-            "border transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-accent",
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-accent",
             showAdvanced
               ? "bg-accent/10 border-accent text-accent"
               : "border-border text-secondaryText hover:text-primaryText hover:border-primaryText/30",
@@ -150,7 +123,7 @@ const TransactionsToolbar = ({ showAdvanced, onToggleAdvanced }) => {
           )}
         </button>
 
-        {/* ── Reset (only when something is active) ── */}
+        {/* ── Reset ── */}
         {hasAnyFilter && (
           <button
             onClick={handleReset}

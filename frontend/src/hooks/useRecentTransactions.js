@@ -1,95 +1,75 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getTransactions } from "../api/transactionApi";
 
+const normalizeTransaction = (tx) => ({
+  ...tx,
+  categoryName:
+    typeof tx.category === "object" && tx.category !== null
+      ? tx.category.name
+      : (tx.category ?? "Unknown"),
+  categoryId:
+    typeof tx.category === "object" && tx.category !== null
+      ? tx.category._id
+      : tx.category,
+});
+
 const useRecentTransactions = (limit = 5) => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Stable ref avoids stale-closure issues when limit changes mid-mount
   const limitRef = useRef(limit);
   useEffect(() => {
     limitRef.current = limit;
   }, [limit]);
 
+  const abortRef = useRef(null);
+
+  // ── Single shared fetch implementation ────────────────────────────────────
+  const doFetch = useCallback(async (signal) => {
+    try {
+      const data = await getTransactions(
+        { limit: limitRef.current, sort: "latest", page: 1 },
+        { signal },
+      );
+      return (data.transactions ?? []).map(normalizeTransaction);
+    } catch (err) {
+      if (err?.name === "AbortError" || err?.name === "CanceledError")
+        return null;
+      console.error("useRecentTransactions error:", err);
+      return [];
+    }
+  }, []);
+
+  // ── Manual refresh (stable reference) ────────────────────────────────────
   const refresh = useCallback(async () => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setLoading(true);
+    const result = await doFetch(controller.signal);
+    if (result !== null) setTransactions(result);
+    if (!controller.signal.aborted) setLoading(false);
+  }, [doFetch]);
+
+  // ── Initial load ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
 
-    try {
-      const data = await getTransactions({
-        limit: limitRef.current,
-        sort: "latest",
-        page: 1,
-      });
-
-      const raw = data.transactions ?? [];
-
-      const normalised = raw.map((tx) => ({
-        ...tx,
-        categoryName:
-          typeof tx.category === "object" && tx.category !== null
-            ? tx.category.name
-            : (tx.category ?? "Unknown"),
-        categoryId:
-          typeof tx.category === "object" && tx.category !== null
-            ? tx.category._id
-            : tx.category,
-      }));
-
-      setTransactions(normalised);
-    } catch (err) {
-      // Recent-activity failing is non-critical; log and leave list empty.
-      console.error("useRecentTransactions error:", err);
-      setTransactions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []); // limitRef is a ref — safe to omit from deps
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const run = async () => {
-      setLoading(true);
-
-      try {
-        const data = await getTransactions({
-          limit: limitRef.current,
-          sort: "latest",
-          page: 1,
-        });
-
-        if (cancelled) return;
-
-        const raw = data.transactions ?? [];
-
-        const normalised = raw.map((tx) => ({
-          ...tx,
-          categoryName:
-            typeof tx.category === "object" && tx.category !== null
-              ? tx.category.name
-              : (tx.category ?? "Unknown"),
-          categoryId:
-            typeof tx.category === "object" && tx.category !== null
-              ? tx.category._id
-              : tx.category,
-        }));
-
-        setTransactions(normalised);
-      } catch (err) {
-        if (cancelled) return;
-        console.error("useRecentTransactions error:", err);
-        setTransactions([]);
-      } finally {
-        if (!cancelled) setLoading(false);
+    doFetch(controller.signal).then((result) => {
+      if (result === null) return; // aborted
+      if (!controller.signal.aborted) {
+        setTransactions(result);
+        setLoading(false);
       }
-    };
+    });
 
-    run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [limit]);
+    return () => controller.abort();
+  }, [limit, doFetch]);
 
   return { transactions, loading, refresh };
 };
