@@ -10,14 +10,12 @@ import useCategories from "../hooks/useCategories";
 import useFonts from "../hooks/useFonts";
 import { TYPE_COLORS } from "../constants/colors";
 
-/* ─── Constants ──────────────────────────────────────────────────────────── */
 const FREQUENCIES = [
   { value: "daily", label: "Daily", short: "D", color: "#38bdf8" },
   { value: "weekly", label: "Weekly", short: "W", color: "#a78bfa" },
   { value: "monthly", label: "Monthly", short: "M", color: "#6366f1" },
   { value: "yearly", label: "Yearly", short: "Y", color: "#facc15" },
 ];
-
 const FREQ_MAP = Object.fromEntries(FREQUENCIES.map((f) => [f.value, f]));
 
 const EMPTY_FORM = {
@@ -29,9 +27,9 @@ const EMPTY_FORM = {
   startDate: new Date().toISOString().split("T")[0],
   endDate: "",
   note: "",
+  paymentMethod: "bank",
 };
 
-/* ─── Helpers ────────────────────────────────────────────────────────────── */
 const inrFmt = (v) => `₹${Number(v).toLocaleString("en-IN")}`;
 
 const daysUntil = (dateStr) => {
@@ -67,7 +65,6 @@ const computeNextDate = (item) => {
   const d = new Date(
     Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()),
   );
-
   switch (item.frequency) {
     case "daily":
       d.setUTCDate(d.getUTCDate() + 1);
@@ -81,10 +78,7 @@ const computeNextDate = (item) => {
     case "yearly":
       d.setUTCFullYear(d.getUTCFullYear() + 1);
       break;
-    default:
-      break;
   }
-
   return d.toISOString();
 };
 
@@ -107,27 +101,14 @@ const resolveCategoryName = (item, categories) => {
   return found?.name ?? "Uncategorised";
 };
 
-/* ─── Shared input class ─────────────────────────────────────────────────── */
 const inputCls = [
   "w-full bg-[#0f0f11] border border-[#27272a] rounded-lg px-3 py-2",
   "text-sm text-[#e4e4e7] placeholder:text-[#52525b]",
   "focus:outline-none focus:ring-2 focus:ring-[#6366f1]/50 focus:border-[#6366f1]/60",
   "transition-all duration-150",
 ].join(" ");
-
 const selectCls = inputCls + " cursor-pointer";
 
-/* ─── SectionLabel ───────────────────────────────────────────────────────── */
-const SectionLabel = ({ children }) => (
-  <p
-    className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#52525b] mb-3"
-    style={{ fontFamily: "'Sora', sans-serif" }}
-  >
-    {children}
-  </p>
-);
-
-/* ─── FrequencyBadge ─────────────────────────────────────────────────────── */
 const FrequencyBadge = ({ frequency }) => {
   const f = FREQ_MAP[frequency] ?? {
     short: "?",
@@ -141,7 +122,7 @@ const FrequencyBadge = ({ frequency }) => {
         borderColor: `${f.color}50`,
         background: `${f.color}12`,
         color: f.color,
-        fontFamily: "'JetBrains Mono', monospace",
+        fontFamily: "'JetBrains Mono',monospace",
       }}
     >
       {f.short} · {f.label}
@@ -149,7 +130,6 @@ const FrequencyBadge = ({ frequency }) => {
   );
 };
 
-/* ─── TypeDot ────────────────────────────────────────────────────────────── */
 const TypeDot = ({ type }) => (
   <span
     className="w-1.5 h-1.5 rounded-full shrink-0"
@@ -157,30 +137,20 @@ const TypeDot = ({ type }) => (
   />
 );
 
-/* ─── StatusToggle ───────────────────────────────────────────────────────── */
 const StatusToggle = ({ active, loading, onClick }) => (
   <button
     onClick={onClick}
     disabled={loading}
     title={active ? "Pause" : "Resume"}
-    className={[
-      "relative w-9 h-5 rounded-full transition-all duration-200",
-      "focus:outline-none focus:ring-2 focus:ring-[#6366f1]/50",
-      "disabled:opacity-40 disabled:cursor-not-allowed shrink-0",
-      active ? "bg-[#6366f1]" : "bg-[#27272a]",
-    ].join(" ")}
+    className={`relative w-9 h-5 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/50 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 ${active ? "bg-[#6366f1]" : "bg-[#27272a]"}`}
   >
     <span
-      className={[
-        "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200",
-        active ? "left-[calc(100%-18px)]" : "left-0.5",
-      ].join(" ")}
+      className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${active ? "left-[calc(100%-18px)]" : "left-0.5"}`}
     />
   </button>
 );
 
-/* ─── DeleteConfirm ──────────────────────────────────────────────────────── */
-const DeleteConfirm = ({ name, onConfirm, onCancel }) => (
+const DeleteConfirmModal = ({ name, onConfirm, onCancel }) => (
   <div
     className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
     style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
@@ -194,13 +164,13 @@ const DeleteConfirm = ({ name, onConfirm, onCancel }) => (
     >
       <p
         className="text-sm font-semibold text-[#e4e4e7] mb-1"
-        style={{ fontFamily: "'Sora', sans-serif" }}
+        style={{ fontFamily: "'Sora',sans-serif" }}
       >
         Delete recurring transaction?
       </p>
       <p
         className="text-xs text-[#71717a] mb-5 leading-relaxed"
-        style={{ fontFamily: "'Sora', sans-serif" }}
+        style={{ fontFamily: "'Sora',sans-serif" }}
       >
         <span className="text-[#a1a1aa] font-medium">{name}</span> will be
         permanently removed. Future auto-posts will stop immediately.
@@ -209,14 +179,14 @@ const DeleteConfirm = ({ name, onConfirm, onCancel }) => (
         <button
           onClick={onCancel}
           className="flex-1 py-2 rounded-lg border border-[#27272a] text-sm text-[#a1a1aa] hover:border-[#3f3f46] hover:text-[#e4e4e7] transition-all"
-          style={{ fontFamily: "'Sora', sans-serif" }}
+          style={{ fontFamily: "'Sora',sans-serif" }}
         >
           Cancel
         </button>
         <button
           onClick={onConfirm}
           className="flex-1 py-2 rounded-lg border border-[#f87171]/30 bg-[#f87171]/10 text-sm text-[#f87171] hover:bg-[#f87171]/20 transition-all"
-          style={{ fontFamily: "'Sora', sans-serif" }}
+          style={{ fontFamily: "'Sora',sans-serif" }}
         >
           Delete
         </button>
@@ -225,12 +195,11 @@ const DeleteConfirm = ({ name, onConfirm, onCancel }) => (
   </div>
 );
 
-/* ─── Field wrapper ──────────────────────────────────────────────────────── */
 const Field = ({ label, error, children }) => (
   <div>
     <label
       className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-[#52525b] mb-1.5"
-      style={{ fontFamily: "'Sora', sans-serif" }}
+      style={{ fontFamily: "'Sora',sans-serif" }}
     >
       {label}
     </label>
@@ -239,7 +208,8 @@ const Field = ({ label, error, children }) => (
   </div>
 );
 
-/* ─── Inline Add / Edit Form ─────────────────────────────────────────────── */
+// ─── Recurring Form ───────────────────────────────────────────────────────────
+
 const RecurringForm = ({
   initialData = EMPTY_FORM,
   categories,
@@ -291,7 +261,7 @@ const RecurringForm = ({
     <form
       onSubmit={handleSubmit}
       className="rounded-xl border border-[#6366f1]/30 bg-[#6366f1]/5 p-5 mb-5"
-      style={{ fontFamily: "'Sora', sans-serif" }}
+      style={{ fontFamily: "'Sora',sans-serif" }}
     >
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6366f1] mb-4">
         {isEdit ? "Edit Recurring Transaction" : "New Recurring Transaction"}
@@ -315,7 +285,7 @@ const RecurringForm = ({
           <div className="relative">
             <span
               className="absolute left-3 top-1/2 -translate-y-1/2 text-[#52525b] text-sm pointer-events-none"
-              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              style={{ fontFamily: "'JetBrains Mono',monospace" }}
             >
               ₹
             </span>
@@ -327,7 +297,7 @@ const RecurringForm = ({
               min="0.01"
               step="0.01"
               className={inputCls + " pl-7"}
-              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              style={{ fontFamily: "'JetBrains Mono',monospace" }}
               disabled={loading}
             />
           </div>
@@ -364,7 +334,6 @@ const RecurringForm = ({
             })}
           </div>
         </Field>
-
         <Field label="Category" error={errors.category}>
           <select
             value={form.category}
@@ -380,8 +349,7 @@ const RecurringForm = ({
             ))}
           </select>
         </Field>
-
-        <Field label="Frequency" error={errors.frequency}>
+        <Field label="Frequency">
           <select
             value={form.frequency}
             onChange={set("frequency")}
@@ -398,7 +366,7 @@ const RecurringForm = ({
       </div>
 
       {/* Row 3: Start + End + Note */}
-      <div className="grid sm:grid-cols-3 gap-3 mb-4">
+      <div className="grid sm:grid-cols-3 gap-3 mb-3">
         <Field label="Start Date" error={errors.startDate}>
           <input
             type="date"
@@ -408,7 +376,7 @@ const RecurringForm = ({
             disabled={loading}
           />
         </Field>
-        <Field label="End Date (optional)" error={errors.endDate}>
+        <Field label="End Date (optional)">
           <input
             type="date"
             value={form.endDate}
@@ -431,6 +399,22 @@ const RecurringForm = ({
         </Field>
       </div>
 
+      <div className="mb-4">
+        <Field label="Payment Method">
+          <select
+            value={form.paymentMethod}
+            onChange={set("paymentMethod")}
+            className={selectCls}
+            disabled={loading}
+          >
+            <option value="bank">Bank Transfer</option>
+            <option value="upi">UPI</option>
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+          </select>
+        </Field>
+      </div>
+
       {/* Monthly preview */}
       {form.amount && Number(form.amount) > 0 && (
         <div className="mb-4 px-3 py-2 rounded-lg border border-[#27272a] bg-[#0f0f11]/60 flex items-center gap-2">
@@ -440,7 +424,7 @@ const RecurringForm = ({
           <span
             className="text-sm font-semibold tabular-nums"
             style={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "'JetBrains Mono',monospace",
               color: tc?.text ?? "#e4e4e7",
             }}
           >
@@ -449,7 +433,6 @@ const RecurringForm = ({
         </div>
       )}
 
-      {/* Actions */}
       <div className="flex gap-2">
         <button
           type="submit"
@@ -472,7 +455,8 @@ const RecurringForm = ({
   );
 };
 
-/* ─── Recurring Row ──────────────────────────────────────────────────────── */
+// ─── Recurring Row ────────────────────────────────────────────────────────────
+
 const RecurringRow = ({
   item,
   categories,
@@ -488,35 +472,25 @@ const RecurringRow = ({
   const nextLabel = countdown(computeNextDate(item));
   const isOverdue = nextLabel === "Overdue";
   const isToday = nextLabel === "Today";
-
   const catName = resolveCategoryName(item, categories);
 
   return (
     <div
-      className={[
-        "relative flex flex-col sm:flex-row sm:items-center justify-between",
-        "gap-3 px-5 py-3.5 border-b border-[#27272a]/40 last:border-0",
-        "transition-colors duration-100",
-        hovered ? "bg-[#1a1a1e]" : idx % 2 !== 0 ? "bg-white/[0.01]" : "",
-        !item.isActive ? "opacity-50" : "",
-      ].join(" ")}
+      className={`relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3.5 border-b border-[#27272a]/40 last:border-0 transition-colors duration-100 ${hovered ? "bg-[#1a1a1e]" : idx % 2 !== 0 ? "bg-white/[0.01]" : ""} ${!item.isActive ? "opacity-50" : ""}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Left accent bar */}
       <span
         className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-7 rounded-r-full transition-opacity duration-150"
         style={{ background: tc?.border, opacity: hovered ? 1 : 0.35 }}
       />
-
-      {/* ── Col 1: Title + meta ── */}
       <div className="flex items-center gap-3 min-w-0 pl-2 flex-1">
         <TypeDot type={item.type} />
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p
               className="text-sm font-medium text-[#e4e4e7] truncate"
-              style={{ fontFamily: "'Sora', sans-serif" }}
+              style={{ fontFamily: "'Sora',sans-serif" }}
             >
               {item.title || catName}
             </p>
@@ -524,21 +498,18 @@ const RecurringRow = ({
           </div>
           <p
             className="text-[11px] text-[#52525b] mt-0.5"
-            style={{ fontFamily: "'Sora', sans-serif" }}
+            style={{ fontFamily: "'Sora',sans-serif" }}
           >
             {catName}
             {item.note ? ` · ${item.note}` : ""}
           </p>
         </div>
       </div>
-
-      {/* ── Col 2: Schedule info ── */}
       <div className="flex items-center gap-5 shrink-0 sm:pl-4">
-        {/* Dates */}
         <div className="hidden lg:block text-right">
           <p
             className="text-[11px] text-[#52525b]"
-            style={{ fontFamily: "'Sora', sans-serif" }}
+            style={{ fontFamily: "'Sora',sans-serif" }}
           >
             {fmtDate(item.startDate)}
             {item.endDate ? ` → ${fmtDate(item.endDate)}` : ""}
@@ -547,7 +518,7 @@ const RecurringRow = ({
             <p
               className="text-[11px] font-semibold"
               style={{
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: "'JetBrains Mono',monospace",
                 color: isOverdue ? "#f87171" : isToday ? "#facc15" : "#a5b4fc",
               }}
             >
@@ -555,13 +526,11 @@ const RecurringRow = ({
             </p>
           )}
         </div>
-
-        {/* Amount */}
         <div className="text-right min-w-[80px]">
           <p
             className="text-sm font-semibold tabular-nums"
             style={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "'JetBrains Mono',monospace",
               color: tc?.text ?? "#e4e4e7",
             }}
           >
@@ -570,37 +539,30 @@ const RecurringRow = ({
           </p>
           <p
             className="text-[10px] text-[#52525b] mt-0.5 tabular-nums"
-            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            style={{ fontFamily: "'JetBrains Mono',monospace" }}
           >
             {inrFmt(toMonthly(item.amount, item.frequency).toFixed(0))}/mo
           </p>
         </div>
-
-        {/* Status toggle */}
         <StatusToggle
           active={item.isActive}
           loading={toggling}
           onClick={() => onToggle(item._id, item.isActive)}
         />
-
-        {/* Action buttons */}
         <div
-          className={[
-            "flex items-center gap-1 transition-opacity duration-150",
-            hovered ? "opacity-100" : "opacity-0",
-          ].join(" ")}
+          className={`flex items-center gap-1 transition-opacity duration-150 ${hovered ? "opacity-100" : "opacity-0"}`}
         >
           <button
             onClick={() => onEdit(item)}
             className="text-[11px] px-2.5 py-1 rounded-md border border-[#27272a] text-[#71717a] hover:text-[#e4e4e7] hover:border-[#3f3f46] transition-all"
-            style={{ fontFamily: "'Sora', sans-serif" }}
+            style={{ fontFamily: "'Sora',sans-serif" }}
           >
             Edit
           </button>
           <button
             onClick={() => onDelete(item)}
             className="text-[11px] px-2.5 py-1 rounded-md border border-[#f87171]/20 text-[#f87171]/60 hover:text-[#f87171] hover:border-[#f87171]/40 hover:bg-[#f87171]/8 transition-all"
-            style={{ fontFamily: "'Sora', sans-serif" }}
+            style={{ fontFamily: "'Sora',sans-serif" }}
           >
             Delete
           </button>
@@ -610,48 +572,8 @@ const RecurringRow = ({
   );
 };
 
-/* ─── Empty state ────────────────────────────────────────────────────────── */
-const EmptyState = ({ filtered, onClear, onAdd }) => (
-  <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
-    <span className="text-5xl opacity-20">↺</span>
-    <p
-      className="text-sm font-medium text-[#a1a1aa]"
-      style={{ fontFamily: "'Sora', sans-serif" }}
-    >
-      {filtered
-        ? "No recurring transactions match"
-        : "No recurring transactions yet"}
-    </p>
-    <p
-      className="text-xs text-[#52525b]"
-      style={{ fontFamily: "'Sora', sans-serif" }}
-    >
-      {filtered
-        ? "Try a different filter or search term."
-        : "Automate salaries, subscriptions, and EMIs."}
-    </p>
-    <div className="flex gap-3 mt-1">
-      {filtered && (
-        <button
-          onClick={onClear}
-          className="text-xs text-[#6366f1] hover:text-[#818cf8] transition-colors"
-        >
-          Clear filter
-        </button>
-      )}
-      <button
-        onClick={onAdd}
-        className="text-xs text-[#6366f1] hover:text-[#818cf8] transition-colors"
-      >
-        + Add recurring →
-      </button>
-    </div>
-  </div>
-);
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  RECURRING TRANSACTIONS PAGE                                                */
-/* ═══════════════════════════════════════════════════════════════════════════ */
 const RecurringTransactions = () => {
   useFonts();
 
@@ -659,42 +581,34 @@ const RecurringTransactions = () => {
   const [pageLoading, setPageLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(null);
-
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-
   const [filterType, setFilterType] = useState("");
   const [filterFreq, setFilterFreq] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [search, setSearch] = useState("");
 
-  // Categories come from context — no longer fetched here
   const { categories } = useCategories();
 
-  /* ── Load recurring transactions only ── */
   useEffect(() => {
     let cancelled = false;
-
     const load = async () => {
       try {
-        const txData = await getRecurringTransactions();
-        if (!cancelled) setItems(txData);
+        const data = await getRecurringTransactions();
+        if (!cancelled) setItems(data);
       } catch (err) {
-        if (!cancelled)
-          console.error("Failed to load recurring transactions:", err);
+        if (!cancelled) console.error("Failed to load recurring:", err);
       } finally {
         if (!cancelled) setPageLoading(false);
       }
     };
-
     load();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  /* ── Derived: filtered list ── */
   const filtered = useMemo(() => {
     let list = items;
     if (filterType) list = list.filter((i) => i.type === filterType);
@@ -713,7 +627,6 @@ const RecurringTransactions = () => {
     return list;
   }, [items, filterType, filterFreq, filterStatus, search, categories]);
 
-  /* ── Stats ── */
   const stats = useMemo(() => {
     const active = items.filter((i) => i.isActive);
     return {
@@ -728,7 +641,6 @@ const RecurringTransactions = () => {
     };
   }, [items]);
 
-  /* ── Save (add or edit) ── */
   const handleSave = async (formData) => {
     setSaving(true);
     try {
@@ -753,7 +665,6 @@ const RecurringTransactions = () => {
     }
   };
 
-  /* ── Delete ── */
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     try {
@@ -766,15 +677,12 @@ const RecurringTransactions = () => {
     }
   };
 
-  /* ── Toggle isActive ── */
   const handleToggle = async (id, currentIsActive) => {
     const nextIsActive = !currentIsActive;
-
     setItems((prev) =>
       prev.map((i) => (i._id === id ? { ...i, isActive: nextIsActive } : i)),
     );
     setToggling(id);
-
     try {
       const serverDoc = await toggleRecurringTransaction(id, nextIsActive);
       setItems((prev) =>
@@ -796,23 +704,18 @@ const RecurringTransactions = () => {
     }
   };
 
-  /* ── Open edit ── */
   const handleEdit = (item) => {
     setEditTarget(item);
     setShowForm(true);
   };
-
-  /* ── Reset filters ── */
   const resetFilters = () => {
     setFilterType("");
     setFilterFreq("");
     setFilterStatus("");
     setSearch("");
   };
-
   const isFiltered = filterType || filterFreq || filterStatus || search.trim();
 
-  /* ── Derive form initial values from editTarget ── */
   const formInitial = editTarget
     ? {
         title: editTarget.title ?? "",
@@ -830,15 +733,15 @@ const RecurringTransactions = () => {
           ? new Date(editTarget.endDate).toISOString().split("T")[0]
           : "",
         note: editTarget.note ?? "",
+        paymentMethod: editTarget.paymentMethod ?? "bank",
       }
     : EMPTY_FORM;
 
-  /* ── Loading ── */
   if (pageLoading) {
     return (
       <div
         className="min-h-screen bg-[#0a0a0c] flex items-center justify-center"
-        style={{ fontFamily: "'Sora', sans-serif" }}
+        style={{ fontFamily: "'Sora',sans-serif" }}
       >
         <div className="flex flex-col items-center gap-3">
           <div className="w-6 h-6 border-[3px] border-[#6366f1] border-t-transparent rounded-full animate-spin" />
@@ -853,9 +756,8 @@ const RecurringTransactions = () => {
   return (
     <div
       className="min-h-screen bg-[#0a0a0c] text-[#e4e4e7]"
-      style={{ fontFamily: "'Sora', sans-serif" }}
+      style={{ fontFamily: "'Sora',sans-serif" }}
     >
-      {/* ── Ambient orb ── */}
       <div
         aria-hidden
         className="pointer-events-none fixed inset-0 overflow-hidden z-0"
@@ -869,12 +771,9 @@ const RecurringTransactions = () => {
         />
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          STICKY TOOLBAR
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* ── Toolbar ── */}
       <div className="sticky top-0 z-10 border-b border-[#27272a] bg-[#0a0a0c]/95 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 md:px-8 py-3 flex flex-wrap items-center gap-2">
-          {/* Search */}
           <div className="relative flex-1 min-w-[160px] max-w-xs">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#52525b] text-xs pointer-events-none">
               ⌕
@@ -884,40 +783,22 @@ const RecurringTransactions = () => {
               placeholder="Search…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className={[
-                "w-full pl-7 pr-3 py-1.5 text-sm rounded-lg",
-                "bg-[#0f0f11] border border-[#27272a] text-[#e4e4e7]",
-                "placeholder:text-[#52525b] transition-all duration-150",
-                "focus:outline-none focus:ring-2 focus:ring-[#6366f1]/40 focus:border-[#6366f1]/50",
-              ].join(" ")}
+              className="w-full pl-7 pr-3 py-1.5 text-sm rounded-lg bg-[#0f0f11] border border-[#27272a] text-[#e4e4e7] placeholder:text-[#52525b] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/40 focus:border-[#6366f1]/50 transition-all duration-150"
             />
           </div>
-
-          {/* Type filter chips */}
           {["", "income", "expense"].map((t) => (
             <button
               key={t || "all"}
               onClick={() => setFilterType(t)}
-              className={[
-                "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
-                filterType === t
-                  ? "bg-[#6366f1]/15 border-[#6366f1]/40 text-[#a5b4fc]"
-                  : "border-[#27272a] text-[#71717a] hover:text-[#a1a1aa] hover:border-[#3f3f46]",
-              ].join(" ")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filterType === t ? "bg-[#6366f1]/15 border-[#6366f1]/40 text-[#a5b4fc]" : "border-[#27272a] text-[#71717a] hover:text-[#a1a1aa] hover:border-[#3f3f46]"}`}
             >
               {t === "" ? "All types" : t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
           ))}
-
-          {/* Frequency filter */}
           <select
             value={filterFreq}
             onChange={(e) => setFilterFreq(e.target.value)}
-            className={[
-              "bg-[#0f0f11] border border-[#27272a] rounded-lg px-2.5 py-1.5",
-              "text-xs text-[#e4e4e7] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/40",
-              filterFreq ? "border-[#6366f1]/40 text-[#a5b4fc]" : "",
-            ].join(" ")}
+            className={`bg-[#0f0f11] border border-[#27272a] rounded-lg px-2.5 py-1.5 text-xs text-[#e4e4e7] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/40 ${filterFreq ? "border-[#6366f1]/40 text-[#a5b4fc]" : ""}`}
           >
             <option value="">All frequencies</option>
             {FREQUENCIES.map((f) => (
@@ -926,23 +807,15 @@ const RecurringTransactions = () => {
               </option>
             ))}
           </select>
-
-          {/* Status filter */}
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className={[
-              "bg-[#0f0f11] border border-[#27272a] rounded-lg px-2.5 py-1.5",
-              "text-xs text-[#e4e4e7] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/40",
-              filterStatus ? "border-[#6366f1]/40 text-[#a5b4fc]" : "",
-            ].join(" ")}
+            className={`bg-[#0f0f11] border border-[#27272a] rounded-lg px-2.5 py-1.5 text-xs text-[#e4e4e7] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/40 ${filterStatus ? "border-[#6366f1]/40 text-[#a5b4fc]" : ""}`}
           >
             <option value="">All statuses</option>
             <option value="active">Active</option>
             <option value="paused">Paused</option>
           </select>
-
-          {/* Clear filters */}
           {isFiltered && (
             <button
               onClick={resetFilters}
@@ -951,22 +824,13 @@ const RecurringTransactions = () => {
               ✕ Clear
             </button>
           )}
-
           <div className="flex-1" />
-
-          {/* Add button */}
           <button
             onClick={() => {
               setEditTarget(null);
               setShowForm((p) => !p);
             }}
-            className={[
-              "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium shrink-0",
-              "transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/50",
-              showForm && !editTarget
-                ? "border border-[#6366f1]/40 bg-[#6366f1]/10 text-[#a5b4fc]"
-                : "text-white",
-            ].join(" ")}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium shrink-0 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/50 ${showForm && !editTarget ? "border border-[#6366f1]/40 bg-[#6366f1]/10 text-[#a5b4fc]" : "text-white"}`}
             style={
               showForm && !editTarget
                 ? {}
@@ -984,15 +848,12 @@ const RecurringTransactions = () => {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          MAIN CONTENT
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* ── Content ── */}
       <div className="relative z-10 max-w-6xl mx-auto px-6 md:px-8 py-7 space-y-6">
-        {/* ── Page header ── */}
         <div>
           <h1
             className="text-2xl font-semibold text-white"
-            style={{ fontFamily: "'Sora', sans-serif" }}
+            style={{ fontFamily: "'Sora',sans-serif" }}
           >
             Recurring Transactions
           </h1>
@@ -1001,7 +862,6 @@ const RecurringTransactions = () => {
           </p>
         </div>
 
-        {/* ── Stats strip ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             {
@@ -1046,7 +906,7 @@ const RecurringTransactions = () => {
               <p
                 className="text-xl font-semibold tabular-nums pl-1"
                 style={{
-                  fontFamily: "'JetBrains Mono', monospace",
+                  fontFamily: "'JetBrains Mono',monospace",
                   color: s.textColor,
                 }}
               >
@@ -1056,7 +916,6 @@ const RecurringTransactions = () => {
           ))}
         </div>
 
-        {/* ── Inline form ── */}
         {showForm && (
           <RecurringForm
             key={editTarget?._id ?? "new"}
@@ -1072,71 +931,61 @@ const RecurringTransactions = () => {
           />
         )}
 
-        {/* ── Recurring list ── */}
         {filtered.length === 0 ? (
-          <EmptyState
-            filtered={Boolean(isFiltered)}
-            onClear={resetFilters}
-            onAdd={() => {
-              setEditTarget(null);
-              setShowForm(true);
-            }}
-          />
+          <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
+            <span className="text-5xl opacity-20">↺</span>
+            <p
+              className="text-sm font-medium text-[#a1a1aa]"
+              style={{ fontFamily: "'Sora',sans-serif" }}
+            >
+              {isFiltered
+                ? "No recurring transactions match"
+                : "No recurring transactions yet"}
+            </p>
+            <p
+              className="text-xs text-[#52525b]"
+              style={{ fontFamily: "'Sora',sans-serif" }}
+            >
+              {isFiltered
+                ? "Try a different filter or search term."
+                : "Automate salaries, subscriptions, and EMIs."}
+            </p>
+            <div className="flex gap-3 mt-1">
+              {isFiltered && (
+                <button
+                  onClick={resetFilters}
+                  className="text-xs text-[#6366f1] hover:text-[#818cf8] transition-colors"
+                >
+                  Clear filter
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setEditTarget(null);
+                  setShowForm(true);
+                }}
+                className="text-xs text-[#6366f1] hover:text-[#818cf8] transition-colors"
+              >
+                + Add recurring →
+              </button>
+            </div>
+          </div>
         ) : (
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <SectionLabel>
-                {isFiltered
-                  ? `${filtered.length} result${filtered.length !== 1 ? "s" : ""}`
-                  : `${items.length} scheduled`}
-              </SectionLabel>
-
-              {/* Frequency legend */}
-              <div className="hidden sm:flex items-center gap-2">
-                {FREQUENCIES.map((f) => {
-                  const count = filtered.filter(
-                    (i) => i.frequency === f.value,
-                  ).length;
-                  if (!count) return null;
-                  return (
-                    <span
-                      key={f.value}
-                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full border tabular-nums"
-                      style={{
-                        borderColor: `${f.color}40`,
-                        background: `${f.color}10`,
-                        color: f.color,
-                        fontFamily: "'JetBrains Mono', monospace",
-                      }}
-                    >
-                      {f.short} {count}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-
+            <p
+              className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#52525b] mb-3"
+              style={{ fontFamily: "'Sora',sans-serif" }}
+            >
+              {isFiltered
+                ? `${filtered.length} result${filtered.length !== 1 ? "s" : ""}`
+                : `${items.length} scheduled`}
+            </p>
             <div
               className="rounded-xl border border-[#27272a] overflow-hidden"
               style={{
                 background: "linear-gradient(145deg,#18181b 0%,#141416 100%)",
               }}
             >
-              {/* Table head */}
-              <div className="hidden sm:grid grid-cols-[1fr_auto] gap-4 px-5 py-2.5 border-b border-[#27272a] bg-[#0f0f11]/60">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#52525b]">
-                  Transaction
-                </p>
-                <div className="flex items-center gap-5 pr-[120px]">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#52525b] hidden lg:block w-36 text-right">
-                    Schedule
-                  </p>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#52525b] w-20 text-right">
-                    Amount
-                  </p>
-                </div>
-              </div>
-
               {filtered.map((item, idx) => (
                 <RecurringRow
                   key={item._id}
@@ -1150,7 +999,6 @@ const RecurringTransactions = () => {
                 />
               ))}
             </div>
-
             <p className="text-center text-[11px] text-[#3f3f46] mt-5">
               Toggle the switch on any row to pause or resume auto-posting.
             </p>
@@ -1158,9 +1006,8 @@ const RecurringTransactions = () => {
         )}
       </div>
 
-      {/* ── Delete confirm ── */}
       {deleteTarget && (
-        <DeleteConfirm
+        <DeleteConfirmModal
           name={deleteTarget.title || "this transaction"}
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteTarget(null)}

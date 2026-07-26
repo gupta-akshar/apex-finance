@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { ROUTES } from "../constants/routes.js";
 
 const Register = () => {
   const { register } = useAuth();
@@ -14,11 +15,17 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
     try {
       await register(form.name, form.email, form.password);
-      navigate("/dashboard");
+      navigate(ROUTES.DASHBOARD);
     } catch (err) {
-      setError(err.response?.data?.message || "Registration failed");
+      const data = err.response?.data;
+      setError(
+        data?.message ||
+          (Array.isArray(data?.errors) ? data.errors[0] : null) ||
+          "Registration failed. Please try again.",
+      );
     }
   };
 
@@ -26,7 +33,13 @@ const Register = () => {
     <div className="min-h-screen bg-background text-primaryText flex items-center justify-center p-6">
       <div className="bg-card border border-border rounded-xl p-8 w-full max-w-md">
         <h1 className="text-2xl font-bold mb-6 text-center">Register</h1>
-        {error && <p className="text-red-400 mb-4">{error}</p>}
+
+        {error && (
+          <p className="text-red-400 mb-4 text-sm bg-red-500/10 px-3 py-2 rounded-lg">
+            {error}
+          </p>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="text"
@@ -62,11 +75,12 @@ const Register = () => {
             Register
           </button>
         </form>
+
         <p className="text-secondaryText text-sm mt-4 text-center">
           Already have an account?{" "}
           <span
-            className="text-accent cursor-pointer"
-            onClick={() => navigate("/login")}
+            className="text-accent cursor-pointer hover:underline"
+            onClick={() => navigate(ROUTES.LOGIN)}
           >
             Login
           </span>
