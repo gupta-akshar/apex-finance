@@ -1,13 +1,15 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
     "dev": "nodemon src/server.js | pino-pretty --colorize --translateTime \"HH:MM:ss.l\" --ignore \"pid,hostname\"",
     "start": "node src/server.js",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "migrate:token-hash": "node src/migrations/refresh-token-hash.js",
+    "migrate:budget-category": "node src/migrations/budget-category-objectid.js",
+    "migrate:recurring-category": "node src/migrations/recurring-category-objectid.js"
   },
   "keywords": [],
   "author": "Akshar Gupta",
