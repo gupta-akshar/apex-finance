@@ -42,17 +42,19 @@ const userSchema = new mongoose.Schema(
       default: "user",
     },
 
-    refreshToken: {
+    refreshTokenHash: {
       type: String,
       select: false,
+      default: null,
     },
   },
   { timestamps: true },
 );
 
-// ─── Hash password before every save ─────────────────────────────────────────
-userSchema.index({ refreshToken: 1 }, { sparse: true });
+// ─── Indexes ──────────────────────────────────────────────────────────────────
+userSchema.index({ refreshTokenHash: 1 }, { sparse: true });
 
+// ─── Hash password before every save ─────────────────────────────────────────
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
   this.password = await bcrypt.hash(
