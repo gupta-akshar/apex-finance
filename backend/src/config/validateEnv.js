@@ -1,15 +1,3 @@
-// config/validateEnv.js
-
-/**
- * FIXES APPLIED:
- *  H7 — CLIENT_URL is now REQUIRED, not just validated when present.
- *       Previously, omitting CLIENT_URL silently fell back to localhost:5173
- *       in production, making the CORS policy permissive for the wrong origin.
- *  M9 — BCRYPT_ROUNDS is now validated to be an integer >= 10.
- *       Previously BCRYPT_ROUNDS=1 was accepted, producing hashes crackable
- *       in microseconds (cost factor 1 takes ~0.001 ms vs ~100 ms at factor 12).
- */
-
 const isValidOrigin = (value) => {
   if (typeof value !== "string" || value.trim() === "") return false;
   try {
@@ -60,10 +48,7 @@ export const validateEnv = () => {
     }
   }
 
-  // ── CLIENT_URL — FIX H7: now required, not just conditionally validated ────
-  // Previously: if (process.env.CLIENT_URL !== undefined) { ... }
-  // If CLIENT_URL was absent, app.js would fall back to "http://localhost:5173"
-  // in production, opening CORS to the wrong origin.
+  // ── CLIENT_URL — required; must be a valid http/https origin ──────────────
   if (!isValidOrigin(process.env.CLIENT_URL)) {
     errors.push(
       `CLIENT_URL is required and must be a valid http/https origin with no ` +
@@ -72,9 +57,7 @@ export const validateEnv = () => {
     );
   }
 
-  // ── BCRYPT_ROUNDS — FIX M9: enforce minimum safe cost factor ──────────────
-  // Previously there was no check at all. BCRYPT_ROUNDS=1 would be accepted,
-  // producing hashes that are crackable in under a millisecond.
+  // ── BCRYPT_ROUNDS — enforce minimum safe cost factor ──────────────────────
   if (process.env.BCRYPT_ROUNDS !== undefined) {
     const rounds = Number(process.env.BCRYPT_ROUNDS);
     if (!Number.isInteger(rounds) || rounds < 10) {
