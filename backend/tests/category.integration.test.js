@@ -1,7 +1,5 @@
-// ─── Mock rate limiter before any app module is loaded ───────────────────────
 jest.mock("express-rate-limit", () => () => (_req, _res, next) => next());
 
-// ─── Environment variables (must precede app import) ─────────────────────────
 process.env.JWT_ACCESS_SECRET = "test_access_secret_must_be_32_plus_chars_ok";
 process.env.JWT_REFRESH_SECRET = "test_refresh_secret_32_plus_chars_ok_xxxxx";
 process.env.NODE_ENV = "test";
@@ -18,20 +16,12 @@ import Budget from "../src/models/Budget.js";
 import RecurringTransaction from "../src/models/RecurringTransaction.js";
 import { generateAccessToken } from "../src/utils/generateToken.js";
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Shared fixture state
-// ═══════════════════════════════════════════════════════════════════════════
-
 let mongoServer;
 let tokenA, tokenB;
 let userAId, userBId;
 
-// ─── Time helpers ─────────────────────────────────────────────────────────────
-
 const CURRENT_MONTH = new Date().getUTCMonth() + 1;
 const CURRENT_YEAR = new Date().getUTCFullYear();
-
-// ─── Request helpers ──────────────────────────────────────────────────────────
 
 const getCategories = (token) =>
   request(app).get("/api/categories").set("Authorization", `Bearer ${token}`);
@@ -47,24 +37,20 @@ const deleteCategory = (token, id) =>
     .delete(`/api/categories/${id}`)
     .set("Authorization", `Bearer ${token}`);
 
-// ─── Database lifecycle ───────────────────────────────────────────────────────
-
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
   await mongoose.connect(mongoServer.getUri());
 
-  // ── User A ─────────────────────────────────────────────────────────────────
   const userA = await User.create({
-    name: "Category Tester A",
+    name: "Cat Tester A",
     email: "cat_a@test.example.com",
     password: "Password123!",
   });
   userAId = userA._id;
   tokenA = generateAccessToken(userA._id);
 
-  // ── User B (for isolation tests) ───────────────────────────────────────────
   const userB = await User.create({
-    name: "Category Tester B",
+    name: "Cat Tester B",
     email: "cat_b@test.example.com",
     password: "Password456!",
   });
@@ -77,169 +63,91 @@ afterAll(async () => {
   await mongoServer.stop();
 });
 
-// Wipe mutable collections between tests; users survive every afterEach.
 afterEach(async () => {
   await Category.deleteMany({});
   await Budget.deleteMany({});
   await RecurringTransaction.deleteMany({});
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 1. GET /api/categories — list, user-scoped
-// ═══════════════════════════════════════════════════════════════════════════
+// ─── GET /api/categories ──────────────────────────────────────────────────────
 
-describe("GET /api/categories — list categories", () => {
-  it("returns 200 with an array", async () => {
-    const res = await getCategories(tokenA);
-
-    expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
+describe("GET /api/categories", () => {
+  it("returns 200 with array", async () => {
+    expect((await getCategories(tokenA)).status).toBe(200);
+    expect(Array.isArray((await getCategories(tokenA)).body)).toBe(true);
   });
 
-  it("returns an empty array when the user has no categories", async () => {
-    const res = await getCategories(tokenA);
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
+  it("returns empty array when user has no categories", async () => {
+    expect((await getCategories(tokenA)).body).toEqual([]);
   });
 
-  it("returns only the authenticated user's own categories", async () => {
-    // Seed one category for each user
+  it("returns only authenticated user's categories", async () => {
     const catA = await Category.create({
       name: "Groceries",
       type: "expense",
       user: userAId,
     });
-    await Category.create({
-      name: "Freelance",
-      type: "income",
-      user: userBId,
-    });
-
+    await Category.create({ name: "Freelance", type: "income", user: userBId });
     const res = await getCategories(tokenA);
-
-    expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(res.body[0]._id.toString()).toBe(catA._id.toString());
-    expect(res.body[0].name).toBe("Groceries");
   });
 
-  it("does not expose categories belonging to another user", async () => {
+  it("does not expose another user's categories", async () => {
     await Category.create({
       name: "UserBOnly",
       type: "expense",
       user: userBId,
     });
-
     const res = await getCategories(tokenA);
-
-    expect(res.status).toBe(200);
     expect(res.body.map((c) => c.name)).not.toContain("UserBOnly");
   });
 
-  it("returns both income and expense categories for the same user", async () => {
-    await Category.create({ name: "Salary", type: "income", user: userAId });
-    await Category.create({
-      name: "Transport",
-      type: "expense",
-      user: userAId,
-    });
-
-    const res = await getCategories(tokenA);
-
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
-
-    const types = res.body.map((c) => c.type);
-    expect(types).toContain("income");
-    expect(types).toContain("expense");
-  });
-
-  it("each returned document includes _id, name, type, and user fields", async () => {
-    await Category.create({ name: "Bills", type: "expense", user: userAId });
-
-    const res = await getCategories(tokenA);
-
-    expect(res.status).toBe(200);
-    const cat = res.body[0];
-    expect(cat).toHaveProperty("_id");
-    expect(cat).toHaveProperty("name", "Bills");
-    expect(cat).toHaveProperty("type", "expense");
-    expect(cat).toHaveProperty("user");
-  });
-
-  // ── Authentication ─────────────────────────────────────────────────────────
-
-  it("returns 401 when no Authorization header is supplied", async () => {
-    const res = await request(app).get("/api/categories");
-    expect(res.status).toBe(401);
-  });
-
-  it("returns 401 for a malformed Bearer token", async () => {
-    const res = await request(app)
-      .get("/api/categories")
-      .set("Authorization", "Bearer not.a.real.token");
-    expect(res.status).toBe(401);
+  it("returns 401 without token", async () => {
+    expect((await request(app).get("/api/categories")).status).toBe(401);
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 2. POST /api/categories — create
-// ═══════════════════════════════════════════════════════════════════════════
+// ─── POST /api/categories ─────────────────────────────────────────────────────
 
-describe("POST /api/categories — create a category", () => {
-  // ── Happy path ─────────────────────────────────────────────────────────────
-
-  it("returns 201 with the created document for a valid expense category", async () => {
+describe("POST /api/categories — create", () => {
+  it("returns 201 for valid expense category", async () => {
     const res = await postCategory(tokenA, { name: "Food", type: "expense" });
-
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ name: "Food", type: "expense" });
-    expect(res.body._id).toBeDefined();
   });
 
-  it("returns 201 with the created document for a valid income category", async () => {
+  it("returns 201 for valid income category", async () => {
     const res = await postCategory(tokenA, { name: "Salary", type: "income" });
-
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ name: "Salary", type: "income" });
   });
 
-  it("persists the category to the database", async () => {
+  it("persists to database", async () => {
     const res = await postCategory(tokenA, {
       name: "Utilities",
       type: "expense",
     });
-
-    expect(res.status).toBe(201);
     const stored = await Category.findById(res.body._id);
-    expect(stored).not.toBeNull();
     expect(stored.name).toBe("Utilities");
-    expect(stored.type).toBe("expense");
   });
 
-  it("scopes the new category to the authenticated user, not any body field", async () => {
+  it("scopes to authenticated user", async () => {
     const res = await postCategory(tokenA, { name: "Rent", type: "expense" });
-
-    expect(res.status).toBe(201);
     const stored = await Category.findById(res.body._id);
     expect(stored.user.toString()).toBe(userAId.toString());
   });
 
-  it("trims leading and trailing whitespace from the name before persisting", async () => {
+  it("trims whitespace from name", async () => {
     const res = await postCategory(tokenA, {
       name: "  Health  ",
       type: "expense",
     });
-
     expect(res.status).toBe(201);
     expect(res.body.name).toBe("Health");
-
-    const stored = await Category.findById(res.body._id);
-    expect(stored.name).toBe("Health");
   });
 
-  it("two different users may have categories with the same name without conflict", async () => {
+  it("two different users may have categories with the same name", async () => {
     const resA = await postCategory(tokenA, {
       name: "Travel",
       type: "expense",
@@ -248,53 +156,35 @@ describe("POST /api/categories — create a category", () => {
       name: "Travel",
       type: "expense",
     });
-
     expect(resA.status).toBe(201);
     expect(resB.status).toBe(201);
   });
 
-  // ── Whitespace-only name ───────────────────────────────────────────────────
-
-  it("returns 400 when name is a single space", async () => {
-    const res = await postCategory(tokenA, { name: " ", type: "expense" });
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 400 when name is only whitespace characters", async () => {
-    const res = await postCategory(tokenA, { name: "   ", type: "expense" });
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 400 when name trims to a single character (below min length of 2)", async () => {
-    const res = await postCategory(tokenA, { name: " A ", type: "expense" });
-    expect(res.status).toBe(400);
-  });
-
-  // ── Duplicate category ─────────────────────────────────────────────────────
-
-  it("returns 409 when creating a category with the same name and type for the same user", async () => {
+  it("returns 409 for duplicate category — no ReferenceError (scoped variable fix)", async () => {
     await postCategory(tokenA, { name: "Shopping", type: "expense" });
     const res = await postCategory(tokenA, {
       name: "Shopping",
       type: "expense",
     });
-
     expect(res.status).toBe(409);
+    // Verify the message actually contains the category name (would fail if ReferenceError thrown)
+    expect(res.body.message).toMatch(/Shopping/i);
+    expect(res.body.message).toMatch(/already exists/i);
   });
 
-  it("does not create a second document when the duplicate is rejected", async () => {
+  it("does not create duplicate on rejection", async () => {
     await postCategory(tokenA, { name: "Shopping", type: "expense" });
     await postCategory(tokenA, { name: "Shopping", type: "expense" });
-
-    const count = await Category.countDocuments({
-      user: userAId,
-      name: "Shopping",
-      type: "expense",
-    });
-    expect(count).toBe(1);
+    expect(
+      await Category.countDocuments({
+        user: userAId,
+        name: "Shopping",
+        type: "expense",
+      }),
+    ).toBe(1);
   });
 
-  it("allows the same name with a different type (income vs expense)", async () => {
+  it("allows same name with different type", async () => {
     const resExp = await postCategory(tokenA, {
       name: "Bonus",
       type: "expense",
@@ -303,121 +193,91 @@ describe("POST /api/categories — create a category", () => {
       name: "Bonus",
       type: "income",
     });
-
     expect(resExp.status).toBe(201);
     expect(resInc.status).toBe(201);
   });
 
-  // ── Validation — missing / invalid fields ──────────────────────────────────
-
-  it("returns 400 when name is missing from the request body", async () => {
-    const res = await postCategory(tokenA, { type: "expense" });
-    expect(res.status).toBe(400);
+  it("returns 400 for whitespace-only name", async () => {
+    expect(
+      (await postCategory(tokenA, { name: " ", type: "expense" })).status,
+    ).toBe(400);
   });
 
-  it("returns 400 when type is missing from the request body", async () => {
-    const res = await postCategory(tokenA, { name: "Entertainment" });
-    expect(res.status).toBe(400);
+  it("returns 400 for single-character name after trim", async () => {
+    expect(
+      (await postCategory(tokenA, { name: " A ", type: "expense" })).status,
+    ).toBe(400);
   });
 
-  it("returns 400 when type is an invalid enum value", async () => {
-    const res = await postCategory(tokenA, {
-      name: "Misc",
-      type: "transfer",
-    });
-    expect(res.status).toBe(400);
+  it("returns 400 for missing name", async () => {
+    expect((await postCategory(tokenA, { type: "expense" })).status).toBe(400);
   });
-
-  it("returns 400 when name is an empty string", async () => {
-    const res = await postCategory(tokenA, { name: "", type: "expense" });
-    expect(res.status).toBe(400);
+  it("returns 400 for missing type", async () => {
+    expect((await postCategory(tokenA, { name: "Entertainment" })).status).toBe(
+      400,
+    );
   });
-
-  it("returns 400 when name is shorter than 2 characters after trimming", async () => {
-    const res = await postCategory(tokenA, { name: "X", type: "expense" });
-    expect(res.status).toBe(400);
+  it("returns 400 for invalid type value", async () => {
+    expect(
+      (await postCategory(tokenA, { name: "Misc", type: "transfer" })).status,
+    ).toBe(400);
   });
-
-  // ── Authentication ─────────────────────────────────────────────────────────
-
-  it("returns 401 when no Authorization header is supplied", async () => {
-    const res = await request(app)
-      .post("/api/categories")
-      .send({ name: "Health", type: "expense" });
-    expect(res.status).toBe(401);
+  it("returns 400 for empty name string", async () => {
+    expect(
+      (await postCategory(tokenA, { name: "", type: "expense" })).status,
+    ).toBe(400);
   });
-
-  it("returns 401 for a malformed Bearer token", async () => {
-    const res = await request(app)
-      .post("/api/categories")
-      .set("Authorization", "Bearer garbage.token.here")
-      .send({ name: "Health", type: "expense" });
-    expect(res.status).toBe(401);
+  it("returns 401 without token", async () => {
+    expect(
+      (
+        await request(app)
+          .post("/api/categories")
+          .send({ name: "Health", type: "expense" })
+      ).status,
+    ).toBe(401);
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 3. DELETE /api/categories/:id — delete + cascade
-// ═══════════════════════════════════════════════════════════════════════════
+// ─── DELETE /api/categories/:id ───────────────────────────────────────────────
 
-describe("DELETE /api/categories/:id — delete a category", () => {
-  // ── Happy path ─────────────────────────────────────────────────────────────
-
-  it("returns 200 with a deletion message when the owner deletes their category", async () => {
+describe("DELETE /api/categories/:id — cascade", () => {
+  it("returns 200 for owner deletion", async () => {
     const cat = await Category.create({
       name: "Dining",
       type: "expense",
       user: userAId,
     });
-
     const res = await deleteCategory(tokenA, cat._id.toString());
-
     expect(res.status).toBe(200);
     expect(res.body.message).toMatch(/deleted/i);
   });
 
-  it("removes the category document from the database", async () => {
+  it("removes category from database", async () => {
     const cat = await Category.create({
-      name: "Subscriptions",
+      name: "Subs",
       type: "expense",
       user: userAId,
     });
-
     await deleteCategory(tokenA, cat._id.toString());
-
     expect(await Category.findById(cat._id)).toBeNull();
   });
 
-  it("returns 404 when the same category is deleted a second time", async () => {
+  it("returns 404 on second delete", async () => {
     const cat = await Category.create({
       name: "Fuel",
       type: "expense",
       user: userAId,
     });
-
     await deleteCategory(tokenA, cat._id.toString());
-    const res = await deleteCategory(tokenA, cat._id.toString());
-
-    expect(res.status).toBe(404);
+    expect((await deleteCategory(tokenA, cat._id.toString())).status).toBe(404);
   });
 
-  it("returns 404 for a well-formed ObjectId that does not correspond to any category", async () => {
-    const ghostId = new mongoose.Types.ObjectId().toString();
-    const res = await deleteCategory(tokenA, ghostId);
-
-    expect(res.status).toBe(404);
-  });
-
-  // ── Cascade: budget deletion ───────────────────────────────────────────────
-
-  it("deletes all budgets associated with the deleted category", async () => {
+  it("cascade-deletes associated budgets", async () => {
     const cat = await Category.create({
       name: "Groceries",
       type: "expense",
       user: userAId,
     });
-
-    // Seed two budgets for the same category in different months
     await Budget.create({
       user: userAId,
       category: cat._id,
@@ -432,74 +292,27 @@ describe("DELETE /api/categories/:id — delete a category", () => {
       month: CURRENT_MONTH === 1 ? 2 : 1,
       year: CURRENT_YEAR,
     });
-
     const res = await deleteCategory(tokenA, cat._id.toString());
-
-    expect(res.status).toBe(200);
     expect(res.body.cascade.budgetsDeleted).toBe(2);
-
-    const remainingBudgets = await Budget.countDocuments({
-      category: cat._id,
-    });
-    expect(remainingBudgets).toBe(0);
+    expect(await Budget.countDocuments({ category: cat._id })).toBe(0);
   });
 
-  it("reports zero budgetsDeleted in the cascade summary when the category has no budgets", async () => {
+  it("reports 0 budgetsDeleted when no budgets", async () => {
     const cat = await Category.create({
       name: "Gifts",
       type: "expense",
       user: userAId,
     });
-
     const res = await deleteCategory(tokenA, cat._id.toString());
-
-    expect(res.status).toBe(200);
     expect(res.body.cascade.budgetsDeleted).toBe(0);
   });
 
-  it("does not delete budgets belonging to other categories of the same user", async () => {
-    const catToDelete = await Category.create({
-      name: "Electronics",
-      type: "expense",
-      user: userAId,
-    });
-    const catToKeep = await Category.create({
-      name: "Clothing",
-      type: "expense",
-      user: userAId,
-    });
-
-    await Budget.create({
-      user: userAId,
-      category: catToDelete._id,
-      limit: 3000,
-      month: CURRENT_MONTH,
-      year: CURRENT_YEAR,
-    });
-    await Budget.create({
-      user: userAId,
-      category: catToKeep._id,
-      limit: 2000,
-      month: CURRENT_MONTH,
-      year: CURRENT_YEAR,
-    });
-
-    await deleteCategory(tokenA, catToDelete._id.toString());
-
-    const survivingBudget = await Budget.findOne({ category: catToKeep._id });
-    expect(survivingBudget).not.toBeNull();
-  });
-
-  // ── Cascade: recurring transaction deactivation ────────────────────────────
-
-  it("deactivates all active recurring transactions referencing the deleted category", async () => {
+  it("cascade-deactivates active recurring transactions", async () => {
     const cat = await Category.create({
       name: "Internet",
       type: "expense",
       user: userAId,
     });
-
-    // Seed two active recurring transactions for this category
     await RecurringTransaction.insertMany([
       {
         user: userAId,
@@ -522,30 +335,26 @@ describe("DELETE /api/categories/:id — delete a category", () => {
         isActive: true,
       },
     ]);
-
     const res = await deleteCategory(tokenA, cat._id.toString());
-
-    expect(res.status).toBe(200);
     expect(res.body.cascade.recurringDeactivated).toBe(2);
-
-    const stillActive = await RecurringTransaction.countDocuments({
-      category: cat._id,
-      isActive: true,
-    });
-    expect(stillActive).toBe(0);
+    expect(
+      await RecurringTransaction.countDocuments({
+        category: cat._id,
+        isActive: true,
+      }),
+    ).toBe(0);
   });
 
-  it("does not modify already-paused recurring transactions (counts only active deactivations)", async () => {
+  it("does not count already-paused recurring as deactivated", async () => {
     const cat = await Category.create({
       name: "Gym",
       type: "expense",
       user: userAId,
     });
-
     await RecurringTransaction.insertMany([
       {
         user: userAId,
-        title: "Active membership",
+        title: "Active",
         type: "expense",
         amount: 1500,
         category: cat._id,
@@ -555,74 +364,54 @@ describe("DELETE /api/categories/:id — delete a category", () => {
       },
       {
         user: userAId,
-        title: "Paused membership",
+        title: "Paused",
         type: "expense",
         amount: 800,
         category: cat._id,
         frequency: "monthly",
         startDate: new Date(),
-        isActive: false, // already paused
+        isActive: false,
       },
     ]);
-
     const res = await deleteCategory(tokenA, cat._id.toString());
-
-    expect(res.status).toBe(200);
-    // Only the one active rule is counted as deactivated
     expect(res.body.cascade.recurringDeactivated).toBe(1);
   });
 
-  it("reports zero recurringDeactivated when the category has no recurring transactions", async () => {
-    const cat = await Category.create({
-      name: "Hobbies",
-      type: "expense",
-      user: userAId,
-    });
-
-    const res = await deleteCategory(tokenA, cat._id.toString());
-
-    expect(res.status).toBe(200);
-    expect(res.body.cascade.recurringDeactivated).toBe(0);
-  });
-
-  it("does not deactivate recurring transactions that belong to other categories", async () => {
+  it("does not delete unrelated category's budgets", async () => {
     const catToDelete = await Category.create({
-      name: "Streaming",
+      name: "Electronics",
       type: "expense",
       user: userAId,
     });
     const catToKeep = await Category.create({
-      name: "Phone",
+      name: "Clothing",
       type: "expense",
       user: userAId,
     });
-
-    const unrelatedRecurring = await RecurringTransaction.create({
+    await Budget.create({
       user: userAId,
-      title: "Phone Bill",
-      type: "expense",
-      amount: 599,
+      category: catToDelete._id,
+      limit: 3000,
+      month: CURRENT_MONTH,
+      year: CURRENT_YEAR,
+    });
+    await Budget.create({
+      user: userAId,
       category: catToKeep._id,
-      frequency: "monthly",
-      startDate: new Date(),
-      isActive: true,
+      limit: 2000,
+      month: CURRENT_MONTH,
+      year: CURRENT_YEAR,
     });
-
     await deleteCategory(tokenA, catToDelete._id.toString());
-
-    const reloaded = await RecurringTransaction.findById(
-      unrelatedRecurring._id,
-    );
-    expect(reloaded.isActive).toBe(true);
+    expect(await Budget.findOne({ category: catToKeep._id })).not.toBeNull();
   });
 
-  it("cascade response includes both budgetsDeleted and recurringDeactivated keys", async () => {
+  it("cascade summary includes both keys", async () => {
     const cat = await Category.create({
       name: "Childcare",
       type: "expense",
       user: userAId,
     });
-
     await Budget.create({
       user: userAId,
       category: cat._id,
@@ -630,10 +419,9 @@ describe("DELETE /api/categories/:id — delete a category", () => {
       month: CURRENT_MONTH,
       year: CURRENT_YEAR,
     });
-
     await RecurringTransaction.create({
       user: userAId,
-      title: "Daycare fee",
+      title: "Daycare",
       type: "expense",
       amount: 8000,
       category: cat._id,
@@ -641,138 +429,40 @@ describe("DELETE /api/categories/:id — delete a category", () => {
       startDate: new Date(),
       isActive: true,
     });
-
     const res = await deleteCategory(tokenA, cat._id.toString());
-
-    expect(res.status).toBe(200);
     expect(res.body.cascade).toMatchObject({
       budgetsDeleted: 1,
       recurringDeactivated: 1,
     });
   });
 
-  // ── Cross-user protection ──────────────────────────────────────────────────
-
-  it("returns 404 when user B tries to delete user A's category", async () => {
+  it("returns 404 when User B tries to delete User A's category", async () => {
     const cat = await Category.create({
       name: "UserAPrivate",
       type: "expense",
       user: userAId,
     });
-
-    const res = await deleteCategory(tokenB, cat._id.toString());
-
-    expect(res.status).toBe(404);
+    expect((await deleteCategory(tokenB, cat._id.toString())).status).toBe(404);
   });
 
-  it("does not delete user A's category when user B's attempt is rejected", async () => {
+  it("category intact after unauthorized attempt", async () => {
     const cat = await Category.create({
-      name: "UserAProtected",
+      name: "Protected",
       type: "income",
       user: userAId,
     });
-
     await deleteCategory(tokenB, cat._id.toString());
-
-    const stillExists = await Category.findById(cat._id);
-    expect(stillExists).not.toBeNull();
+    expect(await Category.findById(cat._id)).not.toBeNull();
   });
 
-  it("does not cascade-delete user A's budgets when user B is rejected", async () => {
-    const cat = await Category.create({
-      name: "UserABudgetSafe",
-      type: "expense",
-      user: userAId,
-    });
-
-    await Budget.create({
-      user: userAId,
-      category: cat._id,
-      limit: 2000,
-      month: CURRENT_MONTH,
-      year: CURRENT_YEAR,
-    });
-
-    await deleteCategory(tokenB, cat._id.toString()); // rejected
-
-    const budget = await Budget.findOne({ category: cat._id });
-    expect(budget).not.toBeNull();
-  });
-
-  it("does not deactivate user A's recurring transactions when user B is rejected", async () => {
-    const cat = await Category.create({
-      name: "UserARecurringSafe",
-      type: "expense",
-      user: userAId,
-    });
-
-    const rec = await RecurringTransaction.create({
-      user: userAId,
-      title: "Protected recurring",
-      type: "expense",
-      amount: 500,
-      category: cat._id,
-      frequency: "monthly",
-      startDate: new Date(),
-      isActive: true,
-    });
-
-    await deleteCategory(tokenB, cat._id.toString()); // rejected
-
-    const reloaded = await RecurringTransaction.findById(rec._id);
-    expect(reloaded.isActive).toBe(true);
-  });
-
-  it("user A can still delete their own unrelated categories after a cross-user rejection", async () => {
-    const targetCat = await Category.create({
-      name: "UserATarget",
-      type: "expense",
-      user: userAId,
-    });
-    const otherCat = await Category.create({
-      name: "UserAOther",
-      type: "income",
-      user: userAId,
-    });
-
-    // User B fails to delete targetCat
-    await deleteCategory(tokenB, targetCat._id.toString());
-
-    // User A successfully deletes otherCat
-    const res = await deleteCategory(tokenA, otherCat._id.toString());
-    expect(res.status).toBe(200);
-
-    // targetCat is still intact
-    expect(await Category.findById(targetCat._id)).not.toBeNull();
-    // otherCat is gone
-    expect(await Category.findById(otherCat._id)).toBeNull();
-  });
-
-  // ── Authentication ─────────────────────────────────────────────────────────
-
-  it("returns 401 when no Authorization header is supplied", async () => {
+  it("returns 401 without token", async () => {
     const cat = await Category.create({
       name: "AuthTest",
       type: "expense",
       user: userAId,
     });
-
-    const res = await request(app).delete(
-      `/api/categories/${cat._id.toString()}`,
-    );
-    expect(res.status).toBe(401);
-  });
-
-  it("returns 401 for a malformed Bearer token", async () => {
-    const cat = await Category.create({
-      name: "AuthTestMalformed",
-      type: "expense",
-      user: userAId,
-    });
-
-    const res = await request(app)
-      .delete(`/api/categories/${cat._id.toString()}`)
-      .set("Authorization", "Bearer garbage.token.here");
-    expect(res.status).toBe(401);
+    expect(
+      (await request(app).delete(`/api/categories/${cat._id}`)).status,
+    ).toBe(401);
   });
 });

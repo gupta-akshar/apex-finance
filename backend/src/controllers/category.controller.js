@@ -2,29 +2,31 @@ import Category from "../models/Category.js";
 import Budget from "../models/Budget.js";
 import RecurringTransaction from "../models/RecurringTransaction.js";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const VALID_TYPES = ["income", "expense"];
 const MIN_NAME_LENGTH = 2;
-const MAX_NAME_LENGTH = 50; // mirrors the frontend maxLength attribute
+const MAX_NAME_LENGTH = 50;
 
-// GET all categories — scoped to the authenticated user
 export const getCategories = async (req, res) => {
   try {
-    const categories = await Category.find({ user: req.user._id });
+    const categories = await Category.find({ user: req.user._id }).sort({
+      type: 1,
+      name: 1,
+    });
     res.json(categories);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-// ADD category — user is injected from the auth token, never from the body
 export const addCategory = async (req, res) => {
+  let trimmedName;
+  let type;
+
   try {
-    const { name, type } = req.body;
+    type = req.body.type;
+    const rawName = req.body.name;
 
     // ── Type validation ───────────────────────────────────────────────────
-
     if (!type || !VALID_TYPES.includes(type)) {
       return res.status(400).json({
         message: `type must be one of: ${VALID_TYPES.join(", ")}`,
@@ -32,12 +34,11 @@ export const addCategory = async (req, res) => {
     }
 
     // ── Name validation ───────────────────────────────────────────────────
-
-    if (typeof name !== "string") {
+    if (typeof rawName !== "string") {
       return res.status(400).json({ message: "name must be a string" });
     }
 
-    const trimmedName = name.trim();
+    trimmedName = rawName.trim();
 
     if (trimmedName.length === 0) {
       return res.status(400).json({ message: "name must not be empty" });
@@ -55,30 +56,26 @@ export const addCategory = async (req, res) => {
       });
     }
 
-    // ── Persist using the trimmed name, not the raw input ─────────────────
     const category = await Category.create({
       name: trimmedName,
       type,
-      user: req.user._id, // always from verified JWT, not req.body
+      user: req.user._id,
     });
 
     res.status(201).json(category);
   } catch (err) {
     if (err.code === 11000) {
+      // trimmedName and type are now accessible here (outer scope)
       return res.status(409).json({
         message: `A ${type} category named "${trimmedName}" already exists`,
       });
     }
-
-    // ── Generic server error — preserves original behaviour ───────────────
     res.status(500).json({ message: err.message });
   }
 };
 
-// DELETE category — ownership enforced + cascade cleanup
 export const deleteCategory = async (req, res) => {
   try {
-    // ── 1. Delete the category (ownership enforced by the compound filter) ─
     const category = await Category.findOneAndDelete({
       _id: req.params.id,
       user: req.user._id,
@@ -88,13 +85,13 @@ export const deleteCategory = async (req, res) => {
       return res.status(404).json({ message: "Category not found" });
     }
 
-    // ── 2. Cascade: remove orphaned budgets ───────────────────────────────
+    // Cascade: remove orphaned budgets
     const budgetResult = await Budget.deleteMany({
       category: category._id,
       user: req.user._id,
     });
 
-    // ── 3. Cascade: deactivate orphaned recurring transactions ────────────
+    // Cascade: deactivate orphaned recurring transactions
     const recurringResult = await RecurringTransaction.updateMany(
       {
         category: category._id,
@@ -104,7 +101,6 @@ export const deleteCategory = async (req, res) => {
       { $set: { isActive: false } },
     );
 
-    // ── 4. Respond with cascade summary ───────────────────────────────────
     res.json({
       message: "Category deleted",
       cascade: {
