@@ -8,8 +8,9 @@ export const transactionSchema = Joi.object({
     "any.required": "type is required",
   }),
 
-  amount: Joi.number().positive().required().messages({
+  amount: Joi.number().positive().max(1_000_000_000).required().messages({
     "number.positive": "amount must be greater than zero",
+    "number.max": "amount cannot exceed ₹1,000,000,000",
     "any.required": "amount is required",
   }),
 
@@ -21,7 +22,7 @@ export const transactionSchema = Joi.object({
   note: Joi.string().allow("").max(200).optional(),
 
   date: Joi.date().iso().max("now").required().messages({
-    "date.format": "date must be an ISO 8601 date string (e.g. 2024-04-15)",
+    "date.format": "date must be an ISO 8601 date string",
     "date.max": "date cannot be in the future",
     "any.required": "date is required",
   }),
