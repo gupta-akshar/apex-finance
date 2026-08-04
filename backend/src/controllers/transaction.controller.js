@@ -3,6 +3,10 @@ import Budget from "../models/Budget.js";
 import Category from "../models/Category.js";
 import mongoose from "mongoose";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const MAX_AMOUNT = 1_000_000_000; // ₹1 billion hard cap prevents Infinity storage
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const buildFilter = (userId, query) => {
@@ -19,12 +23,12 @@ const buildFilter = (userId, query) => {
     if (startDate) filter.date.$gte = new Date(startDate);
     if (endDate) {
       const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
+      end.setUTCHours(23, 59, 59, 999);
       filter.date.$lte = end;
     }
   } else if (month && year) {
-    const m = Number(month),
-      y = Number(year);
+    const m = Number(month);
+    const y = Number(year);
     filter.date = {
       $gte: new Date(Date.UTC(y, m - 1, 1)),
       $lte: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)),
@@ -49,32 +53,30 @@ const buildSort = (sort) => {
     case "lowest":
       return { amount: 1, date: -1 };
     default:
-      return { date: -1 }; // "latest"
+      return { date: -1 };
   }
 };
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const applyTransactionFields = (doc, source) => {
-  if (source.type !== undefined && ["income", "expense"].includes(source.type))
-    doc.type = source.type;
-  if (source.amount !== undefined) doc.amount = source.amount;
-  if (source.category !== undefined) doc.category = source.category;
-  if (source.note !== undefined) doc.note = source.note;
-  if (source.date !== undefined) doc.date = source.date;
-  if (source.paymentMethod !== undefined)
-    doc.paymentMethod = source.paymentMethod;
-};
-
 // ─── CREATE ───────────────────────────────────────────────────────────────────
-// @route  POST /api/transactions
-// @access Private
 export const createTransaction = async (req, res, next) => {
   try {
     const { type, amount, category, note, date, paymentMethod } = req.body;
 
     if (!type || !amount || !category || !date)
       return res.status(400).json({ message: "Required fields missing" });
+
+    const parsedAmount = Number(amount);
+    if (
+      !isFinite(parsedAmount) ||
+      parsedAmount <= 0 ||
+      parsedAmount > MAX_AMOUNT
+    ) {
+      return res.status(400).json({
+        message: `Amount must be a positive finite number no greater than ${MAX_AMOUNT}`,
+      });
+    }
 
     const categoryDoc = await Category.findOne({
       _id: category,
@@ -86,17 +88,18 @@ export const createTransaction = async (req, res, next) => {
         .json({ message: "Category not found or does not belong to you" });
 
     // ── Budget warning ────────────────────────────────────────────────────────
-    let budgetWarning = false,
-      warningMessage = "";
+    let budgetWarning = false;
+    let warningMessage = "";
 
     if (type === "expense") {
-      const d = date instanceof Date ? date : new Date(date);
+      const d = new Date(date);
+
       const month = d.getUTCMonth() + 1;
       const year = d.getUTCFullYear();
 
       const budget = await Budget.findOne({
         user: req.user._id,
-        category,
+        category: new mongoose.Types.ObjectId(category),
         month,
         year,
       });
@@ -117,10 +120,17 @@ export const createTransaction = async (req, res, next) => {
           { $group: { _id: null, spent: { $sum: "$amount" } } },
         ]);
 
-        const newTotal = (agg?.spent || 0) + Number(amount);
-        if (newTotal > budget.limit) {
+        const spentCents = Math.round((agg?.spent || 0) * 100);
+        const newAmountCents = Math.round(parsedAmount * 100);
+        const limitCents = Math.round(budget.limit * 100);
+        const newTotalCents = spentCents + newAmountCents;
+
+        if (newTotalCents > limitCents) {
           budgetWarning = true;
-          warningMessage = `You exceeded your budget by ₹${(newTotal - budget.limit).toFixed(2)}`;
+          const overspendRupees = ((newTotalCents - limitCents) / 100).toFixed(
+            2,
+          );
+          warningMessage = `You exceeded your budget by ₹${overspendRupees}`;
         }
       }
     }
@@ -128,12 +138,13 @@ export const createTransaction = async (req, res, next) => {
     const transaction = await Transaction.create({
       user: req.user._id,
       type,
-      amount,
+      amount: parsedAmount,
       category,
       note,
       date,
       paymentMethod,
     });
+
     res.status(201).json({ transaction, budgetWarning, warningMessage });
   } catch (error) {
     next(error);
@@ -141,8 +152,6 @@ export const createTransaction = async (req, res, next) => {
 };
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
-// @route  GET /api/transactions
-// @access Private
 export const getTransactions = async (req, res, next) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -153,7 +162,8 @@ export const getTransactions = async (req, res, next) => {
     const filter = buildFilter(req.user._id, req.query);
 
     if (search) {
-      const regex = new RegExp(escapeRegex(search), "i");
+      const safeSearch = search.slice(0, 100);
+      const regex = new RegExp(escapeRegex(safeSearch), "i");
 
       const [result] = await Transaction.aggregate([
         { $match: filter },
@@ -188,7 +198,7 @@ export const getTransactions = async (req, res, next) => {
             ],
           },
         },
-      ]);
+      ]).maxTimeMS(10000);
 
       const total = result?.metadata?.[0]?.total ?? 0;
       const transactions = result?.data ?? [];
@@ -204,16 +214,48 @@ export const getTransactions = async (req, res, next) => {
       });
     }
 
-    // Non-search: standard find (uses compound indexes, already efficient)
-    const [total, transactions] = await Promise.all([
-      Transaction.countDocuments(filter),
-      Transaction.find(filter)
-        .populate("category", "name type")
-        .sort(sort)
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-    ]);
+    const [result] = await Transaction.aggregate([
+      { $match: filter },
+      {
+        $facet: {
+          metadata: [{ $count: "total" }],
+          data: [
+            { $sort: sort },
+            { $skip: skip },
+            { $limit: limit },
+            {
+              $lookup: {
+                from: "categories",
+                localField: "category",
+                foreignField: "_id",
+                as: "category",
+              },
+            },
+            {
+              $unwind: {
+                path: "$category",
+                preserveNullAndEmptyArrays: true,
+              },
+            },
+            {
+              $project: {
+                type: 1,
+                amount: 1,
+                note: 1,
+                date: 1,
+                paymentMethod: 1,
+                createdAt: 1,
+                sourceRecurringId: 1,
+                category: { _id: 1, name: 1, type: 1 },
+              },
+            },
+          ],
+        },
+      },
+    ]).maxTimeMS(10000);
+
+    const total = result?.metadata?.[0]?.total ?? 0;
+    const transactions = result?.data ?? [];
 
     return res.status(200).json({
       transactions,
@@ -225,18 +267,54 @@ export const getTransactions = async (req, res, next) => {
 };
 
 // ─── UPDATE ───────────────────────────────────────────────────────────────────
-// @route  PUT /api/transactions/:id
-// @access Private
 export const updateTransaction = async (req, res, next) => {
   try {
     const transaction = await Transaction.findOne({
       _id: req.params.id,
       user: req.user._id,
     });
+
     if (!transaction)
       return res.status(404).json({ message: "Transaction not found" });
 
-    applyTransactionFields(transaction, req.body);
+    const { type, amount, category, note, date, paymentMethod } = req.body;
+
+    if (type !== undefined) {
+      if (!["income", "expense"].includes(type)) {
+        return res.status(400).json({ message: "Invalid transaction type" });
+      }
+      transaction.type = type;
+    }
+
+    if (amount !== undefined) {
+      const parsedAmount = Number(amount);
+      if (
+        !isFinite(parsedAmount) ||
+        parsedAmount <= 0 ||
+        parsedAmount > MAX_AMOUNT
+      ) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+      transaction.amount = parsedAmount;
+    }
+
+    if (category !== undefined) {
+      const categoryDoc = await Category.findOne({
+        _id: category,
+        user: req.user._id,
+      });
+      if (!categoryDoc) {
+        return res
+          .status(403)
+          .json({ message: "Category not found or does not belong to you" });
+      }
+      transaction.category = category;
+    }
+
+    if (note !== undefined) transaction.note = note;
+    if (date !== undefined) transaction.date = date;
+    if (paymentMethod !== undefined) transaction.paymentMethod = paymentMethod;
+
     const updated = await transaction.save();
     res.status(200).json({ transaction: updated });
   } catch (error) {
@@ -245,18 +323,16 @@ export const updateTransaction = async (req, res, next) => {
 };
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────
-// @route  DELETE /api/transactions/:id
-// @access Private
 export const deleteTransaction = async (req, res, next) => {
   try {
-    const transaction = await Transaction.findOne({
+    const transaction = await Transaction.findOneAndDelete({
       _id: req.params.id,
       user: req.user._id,
     });
+
     if (!transaction)
       return res.status(404).json({ message: "Transaction not found" });
 
-    await transaction.deleteOne();
     res.status(200).json({ message: "Transaction deleted" });
   } catch (error) {
     next(error);
