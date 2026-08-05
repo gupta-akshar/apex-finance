@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 import Transaction from "../models/Transaction.js";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const QUERY_TIMEOUT_MS = 10_000;
+
 // ─── Utility ──────────────────────────────────────────────────────────────────
 
 const getMonthDateRange = (month, year) => {
@@ -33,10 +37,12 @@ export const getMonthlySummaryService = async (userId, month, year) => {
         total: { $round: ["$total", 2] },
       },
     },
-  ]);
+  ])
+    .hint({ user: 1, date: -1 })
+    .maxTimeMS(QUERY_TIMEOUT_MS);
 
-  let income = 0,
-    expense = 0;
+  let income = 0;
+  let expense = 0;
   result.forEach((item) => {
     if (item._id === "income") income = item.total;
     if (item._id === "expense") expense = item.total;
@@ -63,12 +69,20 @@ export const getCategoryBreakdownService = async (
   };
 
   if (month && year) {
-    const { startDate, endDate } = getMonthDateRange(month, year);
+    const numMonth = Number(month);
+    const numYear = Number(year);
+    // FIX: validate these are real numbers before building date range
+    if (!isFinite(numMonth) || !isFinite(numYear)) {
+      return [];
+    }
+    const { startDate, endDate } = getMonthDateRange(numMonth, numYear);
     matchStage.date = { $gte: startDate, $lte: endDate };
   } else if (year) {
+    const numYear = Number(year);
+    if (!isFinite(numYear)) return [];
     matchStage.date = {
-      $gte: new Date(Date.UTC(year, 0, 1)),
-      $lte: new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999)),
+      $gte: new Date(Date.UTC(numYear, 0, 1)),
+      $lte: new Date(Date.UTC(numYear, 11, 31, 23, 59, 59, 999)),
     };
   }
 
@@ -102,7 +116,9 @@ export const getCategoryBreakdownService = async (
       },
     },
     { $sort: { total: -1 } },
-  ]);
+  ])
+    .hint({ user: 1, type: 1, date: -1 })
+    .maxTimeMS(QUERY_TIMEOUT_MS);
 };
 
 // ─── 3. Overview ──────────────────────────────────────────────────────────────
@@ -132,7 +148,7 @@ export const getOverviewService = async (userId) => {
         transactionsCount: 1,
       },
     },
-  ]);
+  ]).maxTimeMS(QUERY_TIMEOUT_MS);
 
   const data = result[0] ?? {
     totalIncome: 0,
@@ -164,6 +180,7 @@ export const getMonthlyTrendService = async (userId, year) => {
     {
       $group: {
         _id: {
+          // $month in MongoDB is UTC — consistent with our Date.UTC() ranges
           month: { $month: "$date" },
           type: "$type",
         },
@@ -179,5 +196,7 @@ export const getMonthlyTrendService = async (userId, year) => {
       },
     },
     { $sort: { month: 1, type: 1 } },
-  ]);
+  ])
+    .hint({ user: 1, date: -1 })
+    .maxTimeMS(QUERY_TIMEOUT_MS);
 };
