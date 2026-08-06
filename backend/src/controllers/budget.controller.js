@@ -3,8 +3,6 @@ import Budget from "../models/Budget.js";
 import Transaction from "../models/Transaction.js";
 import Category from "../models/Category.js";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 const toObjectId = (value) => {
   if (!value) return null;
   if (value instanceof mongoose.Types.ObjectId) return value;
@@ -15,7 +13,6 @@ const toObjectId = (value) => {
 };
 
 // ─── CREATE OR UPDATE BUDGET ──────────────────────────────────────────────────
-// POST /api/budgets
 export const setBudget = async (req, res, next) => {
   try {
     const { category, limit, month, year } = req.body;
@@ -24,7 +21,6 @@ export const setBudget = async (req, res, next) => {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
-    // ── Validate category is a real ObjectId ──────────────────────────────
     const categoryId = toObjectId(category);
     if (!categoryId) {
       return res
@@ -32,7 +28,6 @@ export const setBudget = async (req, res, next) => {
         .json({ message: "category must be a valid Category ObjectId" });
     }
 
-    // ── Confirm the category belongs to this user ─────────────────────────
     const categoryDoc = await Category.findOne({
       _id: categoryId,
       user: req.user._id,
@@ -44,7 +39,6 @@ export const setBudget = async (req, res, next) => {
         .json({ message: "Category not found or does not belong to you" });
     }
 
-    // ── Only expense-type categories make sense as budget targets ─────────
     if (categoryDoc.type !== "expense") {
       return res
         .status(400)
@@ -68,8 +62,7 @@ export const setBudget = async (req, res, next) => {
   }
 };
 
-// ─── GET BUDGET STATUS (progress + percentage) ────────────────────────────────
-// GET /api/budgets/status?month=M&year=Y
+// ─── GET BUDGET STATUS ────────────────────────────────────────────────────────
 export const getBudgetStatus = async (req, res, next) => {
   try {
     const { month, year } = req.query;
@@ -81,49 +74,58 @@ export const getBudgetStatus = async (req, res, next) => {
     const numericMonth = Number(month);
     const numericYear = Number(year);
 
-    // ── Fetch all budgets for this user/month/year, populating category name
-    const budgets = await Budget.find({
-      user: req.user._id,
-      month: numericMonth,
-      year: numericYear,
-    }).populate("category", "name type");
+    const budgetDocs = await Budget.aggregate([
+      {
+        $match: {
+          user: req.user._id,
+          month: numericMonth,
+          year: numericYear,
+        },
+      },
+      {
+        $lookup: {
+          from: "categories",
+          localField: "category",
+          foreignField: "_id",
+          as: "categoryDoc",
+        },
+      },
+      {
+        $unwind: {
+          path: "$categoryDoc",
+          preserveNullAndEmptyArrays: false, // auto-excludes orphaned budgets
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          category: "$categoryDoc._id",
+          categoryName: "$categoryDoc.name",
+          limit: 1,
+          month: 1,
+          year: 1,
+        },
+      },
+    ]);
 
-    if (budgets.length === 0) {
+    if (budgetDocs.length === 0) {
       return res.status(200).json([]);
     }
 
-    const validBudgets = budgets.filter((b) => b.category !== null);
-    const orphanedCount = budgets.length - validBudgets.length;
+    const startDate = new Date(Date.UTC(numericYear, numericMonth - 1, 1));
+    const endDate = new Date(
+      Date.UTC(numericYear, numericMonth, 0, 23, 59, 59, 999),
+    );
 
-    if (orphanedCount > 0) {
-      console.warn(
-        `[getBudgetStatus] ${orphanedCount} budget(s) reference a deleted ` +
-          `category for user ${req.user._id} — skipping.`,
-      );
-    }
+    const categoryIds = budgetDocs.map((b) => b.category);
 
-    if (validBudgets.length === 0) {
-      return res.status(200).json([]);
-    }
-
-    // ── Build date range for the month ────────────────────────────────────
-    const startDate = new Date(numericYear, numericMonth - 1, 1);
-    const endDate = new Date(numericYear, numericMonth, 0, 23, 59, 59, 999);
-
-    // ── Collect the category ObjectIds this user has budgeted ─────────────
-    const categoryIds = validBudgets.map((b) => b.category._id);
-
-    // ── Aggregate spending grouped by category ObjectId ───────────────────
     const expenses = await Transaction.aggregate([
       {
         $match: {
           user: req.user._id,
           type: "expense",
           category: { $in: categoryIds },
-          date: {
-            $gte: startDate,
-            $lte: endDate,
-          },
+          date: { $gte: startDate, $lte: endDate },
         },
       },
       {
@@ -132,31 +134,32 @@ export const getBudgetStatus = async (req, res, next) => {
           spent: { $sum: "$amount" },
         },
       },
-    ]);
+    ]).maxTimeMS(10000);
 
-    // ── Build a lookup map: ObjectId string → amount spent ────────────────
     const spentMap = {};
     expenses.forEach((e) => {
       spentMap[e._id.toString()] = e.spent;
     });
 
-    // ── Merge budget limits with spending data ────────────────────────────
-    const result = validBudgets.map((budget) => {
-      const categoryKey = budget.category._id.toString();
+    const result = budgetDocs.map((budget) => {
+      const categoryKey = budget.category.toString();
       const spent = spentMap[categoryKey] ?? 0;
-      const remaining = budget.limit - spent;
-      const percentage = Number(((spent / budget.limit) * 100).toFixed(2));
+
+      const spentCents = Math.round(spent * 100);
+      const limitCents = Math.round(budget.limit * 100);
+      const remainingCents = limitCents - spentCents;
+      const percentage = Number(((spentCents / limitCents) * 100).toFixed(2));
 
       return {
         _id: budget._id,
-        category: budget.category._id,
-        categoryName: budget.category.name,
+        category: budget.category,
+        categoryName: budget.categoryName,
         limit: budget.limit,
-        spent,
-        remaining,
+        spent: Math.round(spent * 100) / 100,
+        remaining: Math.round(remainingCents) / 100,
         percentage,
         warning: percentage >= 80,
-        exceeded: spent > budget.limit,
+        exceeded: spentCents > limitCents,
         month: budget.month,
         year: budget.year,
       };
@@ -169,7 +172,6 @@ export const getBudgetStatus = async (req, res, next) => {
 };
 
 // ─── DELETE BUDGET ────────────────────────────────────────────────────────────
-// DELETE /api/budgets/:id
 export const deleteBudget = async (req, res, next) => {
   try {
     const budget = await Budget.findOneAndDelete({
@@ -187,8 +189,7 @@ export const deleteBudget = async (req, res, next) => {
   }
 };
 
-// ─── GET ALL BUDGETS (for management UI) ─────────────────────────────────────
-// GET /api/budgets?month=M&year=Y (month/year optional)
+// ─── GET ALL BUDGETS ──────────────────────────────────────────────────────────
 export const getBudgets = async (req, res, next) => {
   try {
     const { month, year } = req.query;
@@ -197,9 +198,37 @@ export const getBudgets = async (req, res, next) => {
     if (month) filter.month = Number(month);
     if (year) filter.year = Number(year);
 
-    const budgets = await Budget.find(filter)
-      .populate("category", "name type")
-      .sort({ year: -1, month: -1 });
+    const budgets = await Budget.aggregate([
+      { $match: filter },
+      {
+        $lookup: {
+          from: "categories",
+          localField: "category",
+          foreignField: "_id",
+          as: "categoryDoc",
+        },
+      },
+      {
+        $unwind: {
+          path: "$categoryDoc",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          limit: 1,
+          month: 1,
+          year: 1,
+          createdAt: 1,
+          category: {
+            _id: "$categoryDoc._id",
+            name: "$categoryDoc.name",
+            type: "$categoryDoc.type",
+          },
+        },
+      },
+      { $sort: { year: -1, month: -1 } },
+    ]).maxTimeMS(10000);
 
     res.status(200).json(budgets);
   } catch (error) {
