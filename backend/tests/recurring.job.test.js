@@ -1,20 +1,3 @@
-/**
- * backend/tests/recurring.job.test.js
- *
- * Integration tests for the recurring transaction cron job.
- *
- * Strategy
- * --------
- * node-cron is mocked so `cron.schedule()` captures the callback without
- * actually waiting for midnight.  We then invoke that callback directly in
- * each test, giving us full control over timing while preserving the real
- * job logic (idempotency index, shouldRun logic, lastExecuted update, etc.).
- *
- * Each test uses an isolated in-memory MongoDB instance (via
- * mongodb-memory-server) and its own seed data so tests never interfere.
- */
-
-// ── Mock node-cron BEFORE any module that imports it is loaded ───────────────
 let capturedCronCallback = null;
 
 jest.mock("node-cron", () => ({
@@ -23,12 +6,10 @@ jest.mock("node-cron", () => ({
   }),
 }));
 
-// ── Env vars (must be set before app modules are imported) ───────────────────
 process.env.JWT_ACCESS_SECRET = "test_access_secret_must_be_32_plus_chars_ok";
 process.env.JWT_REFRESH_SECRET = "test_refresh_secret_32_plus_chars_ok_xxxxx";
 process.env.NODE_ENV = "test";
 
-// ── Imports ───────────────────────────────────────────────────────────────────
 import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
 
@@ -38,13 +19,8 @@ import Transaction from "../src/models/Transaction.js";
 import Category from "../src/models/Category.js";
 import User from "../src/models/User.js";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Return a UTC-midnight Date for `daysAgo` days before today.
- * daysAgo = 0  → today midnight UTC
- * daysAgo = 1  → yesterday midnight UTC
- */
 const utcMidnight = (daysAgo = 0) => {
   const d = new Date();
   d.setUTCHours(0, 0, 0, 0);
@@ -52,32 +28,24 @@ const utcMidnight = (daysAgo = 0) => {
   return d;
 };
 
-/**
- * Return a UTC-midnight Date offset by whole months.
- * monthsAgo = 1 → same day, previous month
- */
 const utcMidnightMonthsAgo = (monthsAgo) => {
   const d = utcMidnight(0);
   d.setUTCMonth(d.getUTCMonth() - monthsAgo);
   return d;
 };
 
-/**
- * Return a UTC-midnight Date offset by whole years.
- */
 const utcMidnightYearsAgo = (yearsAgo) => {
   const d = utcMidnight(0);
   d.setUTCFullYear(d.getUTCFullYear() - yearsAgo);
   return d;
 };
 
-/** Run the captured cron callback and await it. */
-const runJob = () => {
-  if (!capturedCronCallback) throw new Error("Cron callback not yet captured.");
-  return capturedCronCallback();
+const runJob = async () => {
+  if (!capturedCronCallback) throw new Error("Cron callback not captured.");
+  await capturedCronCallback();
 };
 
-// ── DB lifecycle ──────────────────────────────────────────────────────────────
+// ─── DB lifecycle ─────────────────────────────────────────────────────────────
 
 let mongoServer;
 let testUser;
@@ -87,11 +55,9 @@ beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
   await mongoose.connect(mongoServer.getUri());
 
-  // Register the cron callback (captures it via the mock)
   startRecurringJob();
   expect(capturedCronCallback).not.toBeNull();
 
-  // Shared user and category – reused across all tests
   testUser = await User.create({
     name: "Test User",
     email: "cron-test@example.com",
@@ -110,18 +76,20 @@ afterAll(async () => {
   await mongoServer.stop();
 });
 
-// Wipe only the collections written by the job between tests
 afterEach(async () => {
   await RecurringTransaction.deleteMany({});
   await Transaction.deleteMany({});
+  // Clean up job lock between tests
+  const JobLock = mongoose.models.JobLock;
+  if (JobLock) await JobLock.deleteMany({});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1. IDEMPOTENCY – running the job twice must NOT create duplicate transactions
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// 1. IDEMPOTENCY
+// ═══════════════════════════════════════════════════════════════════════════
 
-describe("Idempotency – no duplicate transactions", () => {
-  it("creates exactly one transaction even when the job fires twice on the same day", async () => {
+describe("Idempotency — no duplicate transactions", () => {
+  it("creates exactly one transaction even when the job fires twice", async () => {
     await RecurringTransaction.create({
       user: testUser._id,
       title: "Daily salary",
@@ -129,28 +97,23 @@ describe("Idempotency – no duplicate transactions", () => {
       amount: 500,
       category: testCategory._id,
       frequency: "daily",
-      startDate: utcMidnight(1), // started yesterday → due today
+      startDate: utcMidnight(1),
       isActive: true,
     });
 
-    // First run → should create one transaction
     await runJob();
+    expect(await Transaction.countDocuments({ user: testUser._id })).toBe(1);
 
-    const afterFirstRun = await Transaction.countDocuments({
-      user: testUser._id,
-    });
-    expect(afterFirstRun).toBe(1);
+    // Clean the lock so second run can acquire it
+    const JobLock = mongoose.models.JobLock;
+    if (JobLock) await JobLock.deleteMany({});
 
-    // Second run on the same day → idempotency index must block a second insert
     await runJob();
-
-    const afterSecondRun = await Transaction.countDocuments({
-      user: testUser._id,
-    });
-    expect(afterSecondRun).toBe(1);
+    // Idempotency index must block second insert
+    expect(await Transaction.countDocuments({ user: testUser._id })).toBe(1);
   });
 
-  it("stores a sourceRecurringId on every auto-generated transaction", async () => {
+  it("stores sourceRecurringId on generated transaction", async () => {
     const rule = await RecurringTransaction.create({
       user: testUser._id,
       title: "Idempotency check",
@@ -169,7 +132,7 @@ describe("Idempotency – no duplicate transactions", () => {
     expect(tx.sourceRecurringId.toString()).toBe(rule._id.toString());
   });
 
-  it("updates lastExecuted after the first run so a second run is also blocked via shouldRun logic", async () => {
+  it("updates lastExecuted after first run", async () => {
     await RecurringTransaction.create({
       user: testUser._id,
       title: "Weekly rule",
@@ -177,30 +140,24 @@ describe("Idempotency – no duplicate transactions", () => {
       amount: 1000,
       category: testCategory._id,
       frequency: "weekly",
-      startDate: utcMidnight(7), // 7 days ago → due today
+      startDate: utcMidnight(7),
       isActive: true,
     });
 
     await runJob();
 
-    // lastExecuted is now today → diffDays will be 0 → shouldRun = false
     const rule = await RecurringTransaction.findOne({ user: testUser._id });
     const today = utcMidnight(0);
-    expect(rule.lastExecuted.getTime()).toBeCloseTo(today.getTime(), -3); // within 1 second
-
-    // Second run must add no more transactions
-    await runJob();
-    const count = await Transaction.countDocuments({ user: testUser._id });
-    expect(count).toBe(1);
+    expect(rule.lastExecuted.getTime()).toBeCloseTo(today.getTime(), -3);
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 2. INACTIVE ITEMS – must be completely skipped
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// 2. INACTIVE ITEMS
+// ═══════════════════════════════════════════════════════════════════════════
 
 describe("Inactive recurring items are skipped", () => {
-  it("does not create a transaction for an isActive=false rule", async () => {
+  it("does not create transaction for isActive=false rule", async () => {
     await RecurringTransaction.create({
       user: testUser._id,
       title: "Paused subscription",
@@ -209,16 +166,14 @@ describe("Inactive recurring items are skipped", () => {
       category: testCategory._id,
       frequency: "monthly",
       startDate: utcMidnightMonthsAgo(1),
-      isActive: false, // ← inactive
+      isActive: false,
     });
 
     await runJob();
-
-    const count = await Transaction.countDocuments({ user: testUser._id });
-    expect(count).toBe(0);
+    expect(await Transaction.countDocuments({ user: testUser._id })).toBe(0);
   });
 
-  it("creates a transaction for an active rule but not for an inactive one in the same run", async () => {
+  it("creates transaction for active rule but skips inactive", async () => {
     await RecurringTransaction.create({
       user: testUser._id,
       title: "Active Rule",
@@ -229,7 +184,6 @@ describe("Inactive recurring items are skipped", () => {
       startDate: utcMidnight(1),
       isActive: true,
     });
-
     await RecurringTransaction.create({
       user: testUser._id,
       title: "Inactive Rule",
@@ -248,9 +202,9 @@ describe("Inactive recurring items are skipped", () => {
     expect(txs[0].amount).toBe(900);
   });
 
-  it("auto-deactivates a rule whose endDate is in the past", async () => {
+  it("auto-deactivates rule whose endDate is past", async () => {
     const yesterday = utcMidnight(1);
-    yesterday.setUTCHours(23, 59, 59, 999); // end of yesterday
+    yesterday.setUTCHours(23, 59, 59, 999);
 
     await RecurringTransaction.create({
       user: testUser._id,
@@ -260,29 +214,49 @@ describe("Inactive recurring items are skipped", () => {
       category: testCategory._id,
       frequency: "daily",
       startDate: utcMidnight(10),
-      endDate: yesterday, // expired
+      endDate: yesterday,
       isActive: true,
     });
 
     await runJob();
 
-    // No transaction should have been created
-    const count = await Transaction.countDocuments({ user: testUser._id });
-    expect(count).toBe(0);
-
-    // The rule itself should now be inactive
+    expect(await Transaction.countDocuments({ user: testUser._id })).toBe(0);
     const rule = await RecurringTransaction.findOne({ title: "Expired rule" });
+    expect(rule.isActive).toBe(false);
+  });
+
+  it("skips rules whose category was deleted", async () => {
+    const tempCat = await Category.create({
+      name: "TempCat",
+      type: "expense",
+      user: testUser._id,
+    });
+    await RecurringTransaction.create({
+      user: testUser._id,
+      title: "Orphaned rule",
+      type: "expense",
+      amount: 100,
+      category: tempCat._id,
+      frequency: "daily",
+      startDate: utcMidnight(1),
+      isActive: true,
+    });
+    // Delete category — rule should be skipped and deactivated
+    await Category.findByIdAndDelete(tempCat._id);
+
+    await runJob();
+
+    expect(await Transaction.countDocuments({ user: testUser._id })).toBe(0);
+    const rule = await RecurringTransaction.findOne({ title: "Orphaned rule" });
     expect(rule.isActive).toBe(false);
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 // 3. FREQUENCY CORRECTNESS
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 
 describe("Frequency-based execution logic", () => {
-  // ── DAILY ────────────────────────────────────────────────────────────────
-
   describe("daily", () => {
     it("fires when lastExecuted was yesterday", async () => {
       await RecurringTransaction.create({
@@ -293,36 +267,30 @@ describe("Frequency-based execution logic", () => {
         category: testCategory._id,
         frequency: "daily",
         startDate: utcMidnight(5),
-        lastExecuted: utcMidnight(1), // yesterday → diffDays = 1 ≥ 1
+        lastExecuted: utcMidnight(1),
         isActive: true,
       });
-
       await runJob();
-
-      const count = await Transaction.countDocuments({ user: testUser._id });
-      expect(count).toBe(1);
+      expect(await Transaction.countDocuments({ user: testUser._id })).toBe(1);
     });
 
-    it("does NOT fire when lastExecuted was today (diffDays = 0)", async () => {
+    it("does NOT fire when lastExecuted was today", async () => {
       await RecurringTransaction.create({
         user: testUser._id,
-        title: "Daily – already done",
+        title: "Daily – done",
         type: "income",
         amount: 10,
         category: testCategory._id,
         frequency: "daily",
         startDate: utcMidnight(5),
-        lastExecuted: utcMidnight(0), // today → diffDays = 0 < 1
+        lastExecuted: utcMidnight(0),
         isActive: true,
       });
-
       await runJob();
-
-      const count = await Transaction.countDocuments({ user: testUser._id });
-      expect(count).toBe(0);
+      expect(await Transaction.countDocuments({ user: testUser._id })).toBe(0);
     });
 
-    it("fires when startDate is today and there is no lastExecuted", async () => {
+    it("does NOT fire when startDate is today and no lastExecuted", async () => {
       await RecurringTransaction.create({
         user: testUser._id,
         title: "Brand-new daily",
@@ -330,27 +298,18 @@ describe("Frequency-based execution logic", () => {
         amount: 42,
         category: testCategory._id,
         frequency: "daily",
-        startDate: utcMidnight(0), // today
+        startDate: utcMidnight(0),
         lastExecuted: null,
         isActive: true,
       });
-
       await runJob();
-
-      // startDate = today, lastExecuted = null → base = startDate → diffDays ≥ 0
-      // The job uses startDate as base when lastExecuted is null.
-      // diffDays = 0 for "daily" → shouldRun = (0 >= 1) = false.
-      // This is correct: the rule starts *today*, so the first execution is
-      // tomorrow.  Verify no premature transaction is created.
-      const count = await Transaction.countDocuments({ user: testUser._id });
-      expect(count).toBe(0);
+      // startDate = today, diffDays = 0 < 1 → should NOT fire
+      expect(await Transaction.countDocuments({ user: testUser._id })).toBe(0);
     });
   });
 
-  // ── WEEKLY ───────────────────────────────────────────────────────────────
-
   describe("weekly", () => {
-    it("fires when lastExecuted was exactly 7 days ago", async () => {
+    it("fires when lastExecuted was 7 days ago", async () => {
       await RecurringTransaction.create({
         user: testUser._id,
         title: "Weekly – due",
@@ -359,40 +318,32 @@ describe("Frequency-based execution logic", () => {
         category: testCategory._id,
         frequency: "weekly",
         startDate: utcMidnight(14),
-        lastExecuted: utcMidnight(7), // 7 days ago → diffDays = 7 ≥ 7
+        lastExecuted: utcMidnight(7),
         isActive: true,
       });
-
       await runJob();
-
-      const count = await Transaction.countDocuments({ user: testUser._id });
-      expect(count).toBe(1);
+      expect(await Transaction.countDocuments({ user: testUser._id })).toBe(1);
     });
 
     it("does NOT fire when lastExecuted was only 6 days ago", async () => {
       await RecurringTransaction.create({
         user: testUser._id,
-        title: "Weekly – not due yet",
+        title: "Weekly – not due",
         type: "income",
         amount: 200,
         category: testCategory._id,
         frequency: "weekly",
         startDate: utcMidnight(14),
-        lastExecuted: utcMidnight(6), // 6 days ago → diffDays = 6 < 7
+        lastExecuted: utcMidnight(6),
         isActive: true,
       });
-
       await runJob();
-
-      const count = await Transaction.countDocuments({ user: testUser._id });
-      expect(count).toBe(0);
+      expect(await Transaction.countDocuments({ user: testUser._id })).toBe(0);
     });
   });
 
-  // ── MONTHLY ──────────────────────────────────────────────────────────────
-
   describe("monthly", () => {
-    it("fires when lastExecuted was in the previous calendar month", async () => {
+    it("fires when lastExecuted was in previous month", async () => {
       await RecurringTransaction.create({
         user: testUser._id,
         title: "Monthly – due",
@@ -401,23 +352,19 @@ describe("Frequency-based execution logic", () => {
         category: testCategory._id,
         frequency: "monthly",
         startDate: utcMidnightMonthsAgo(2),
-        lastExecuted: utcMidnightMonthsAgo(1), // previous month → due
+        lastExecuted: utcMidnightMonthsAgo(1),
         isActive: true,
       });
-
       await runJob();
-
-      const count = await Transaction.countDocuments({ user: testUser._id });
-      expect(count).toBe(1);
+      expect(await Transaction.countDocuments({ user: testUser._id })).toBe(1);
     });
 
-    it("does NOT fire when lastExecuted is in the current calendar month", async () => {
+    it("does NOT fire when lastExecuted is in current month", async () => {
       const firstOfThisMonth = utcMidnight(0);
-      firstOfThisMonth.setUTCDate(1); // same month, day 1
-
+      firstOfThisMonth.setUTCDate(1);
       await RecurringTransaction.create({
         user: testUser._id,
-        title: "Monthly – already done this month",
+        title: "Monthly – done",
         type: "expense",
         amount: 1500,
         category: testCategory._id,
@@ -426,18 +373,13 @@ describe("Frequency-based execution logic", () => {
         lastExecuted: firstOfThisMonth,
         isActive: true,
       });
-
       await runJob();
-
-      const count = await Transaction.countDocuments({ user: testUser._id });
-      expect(count).toBe(0);
+      expect(await Transaction.countDocuments({ user: testUser._id })).toBe(0);
     });
   });
 
-  // ── YEARLY ───────────────────────────────────────────────────────────────
-
   describe("yearly", () => {
-    it("fires when lastExecuted was in the previous calendar year", async () => {
+    it("fires when lastExecuted was in previous year", async () => {
       await RecurringTransaction.create({
         user: testUser._id,
         title: "Yearly – due",
@@ -446,53 +388,45 @@ describe("Frequency-based execution logic", () => {
         category: testCategory._id,
         frequency: "yearly",
         startDate: utcMidnightYearsAgo(2),
-        lastExecuted: utcMidnightYearsAgo(1), // last year → due this year
+        lastExecuted: utcMidnightYearsAgo(1),
         isActive: true,
       });
-
       await runJob();
-
-      const count = await Transaction.countDocuments({ user: testUser._id });
-      expect(count).toBe(1);
+      expect(await Transaction.countDocuments({ user: testUser._id })).toBe(1);
     });
 
-    it("does NOT fire when lastExecuted is already in the current year", async () => {
-      const jan1ThisYear = utcMidnight(0);
-      jan1ThisYear.setUTCMonth(0);
-      jan1ThisYear.setUTCDate(1); // 1 Jan of this year
-
+    it("does NOT fire when lastExecuted is in current year", async () => {
+      const jan1 = utcMidnight(0);
+      jan1.setUTCMonth(0);
+      jan1.setUTCDate(1);
       await RecurringTransaction.create({
         user: testUser._id,
-        title: "Yearly – already done this year",
+        title: "Yearly – done",
         type: "income",
         amount: 50000,
         category: testCategory._id,
         frequency: "yearly",
         startDate: utcMidnightYearsAgo(2),
-        lastExecuted: jan1ThisYear,
+        lastExecuted: jan1,
         isActive: true,
       });
-
       await runJob();
-
-      const count = await Transaction.countDocuments({ user: testUser._id });
-      expect(count).toBe(0);
+      expect(await Transaction.countDocuments({ user: testUser._id })).toBe(0);
     });
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 // 4. TRANSACTION FIELD CORRECTNESS
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 
-describe("Created transaction inherits fields from the recurring rule", () => {
-  it("copies user, type, amount, category, note, and date from the rule", async () => {
+describe("Created transaction inherits fields from rule", () => {
+  it("copies all required fields correctly", async () => {
     const expenseCat = await Category.create({
       name: "Rent",
       type: "expense",
       user: testUser._id,
     });
-
     const rule = await RecurringTransaction.create({
       user: testUser._id,
       title: "Monthly Rent",
@@ -517,12 +451,11 @@ describe("Created transaction inherits fields from the recurring rule", () => {
     expect(tx.note).toBe("Office rent");
     expect(tx.sourceRecurringId.toString()).toBe(rule._id.toString());
 
-    // Date should be today midnight UTC
     const today = utcMidnight(0);
     expect(tx.date.getTime()).toBeCloseTo(today.getTime(), -3);
   });
 
-  it("updates lastExecuted on the rule after a successful transaction insert", async () => {
+  it("updates lastExecuted on the rule after successful insert", async () => {
     const rule = await RecurringTransaction.create({
       user: testUser._id,
       title: "Salary",
@@ -543,12 +476,12 @@ describe("Created transaction inherits fields from the recurring rule", () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 5. MULTIPLE RULES IN THE SAME RUN
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. MULTIPLE RULES
+// ═══════════════════════════════════════════════════════════════════════════
 
-describe("Multiple rules processed in a single job run", () => {
-  it("creates one transaction per due rule", async () => {
+describe("Multiple rules in a single run", () => {
+  it("creates one transaction per due rule, skips non-due rules", async () => {
     const rules = [
       {
         title: "Rule A",
@@ -566,7 +499,7 @@ describe("Multiple rules processed in a single job run", () => {
         title: "Rule C (not due)",
         frequency: "daily",
         startDate: utcMidnight(1),
-        lastExecuted: utcMidnight(0), // already ran today
+        lastExecuted: utcMidnight(0),
       },
     ];
 
@@ -586,43 +519,11 @@ describe("Multiple rules processed in a single job run", () => {
     const txCount = await Transaction.countDocuments({ user: testUser._id });
     expect(txCount).toBe(2); // Rule A + Rule B; Rule C skipped
   });
-
-  it("processes due rules and skips inactive ones independently", async () => {
-    await RecurringTransaction.create({
-      user: testUser._id,
-      title: "Active daily",
-      type: "income",
-      amount: 50,
-      category: testCategory._id,
-      frequency: "daily",
-      startDate: utcMidnight(3),
-      lastExecuted: utcMidnight(1),
-      isActive: true,
-    });
-
-    await RecurringTransaction.create({
-      user: testUser._id,
-      title: "Inactive daily",
-      type: "income",
-      amount: 999,
-      category: testCategory._id,
-      frequency: "daily",
-      startDate: utcMidnight(3),
-      lastExecuted: utcMidnight(1),
-      isActive: false,
-    });
-
-    await runJob();
-
-    const txs = await Transaction.find({ user: testUser._id });
-    expect(txs).toHaveLength(1);
-    expect(txs[0].amount).toBe(50);
-  });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 6. RULE NOT YET STARTED
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// 6. FUTURE START DATE
+// ═══════════════════════════════════════════════════════════════════════════
 
 describe("Rules whose startDate is in the future are skipped", () => {
   it("does not fire for a rule starting tomorrow", async () => {
@@ -636,13 +537,11 @@ describe("Rules whose startDate is in the future are skipped", () => {
       amount: 100,
       category: testCategory._id,
       frequency: "daily",
-      startDate: tomorrow, // future → query filter (startDate ≤ today) excludes it
+      startDate: tomorrow,
       isActive: true,
     });
 
     await runJob();
-
-    const count = await Transaction.countDocuments({ user: testUser._id });
-    expect(count).toBe(0);
+    expect(await Transaction.countDocuments({ user: testUser._id })).toBe(0);
   });
 });
