@@ -14,18 +14,19 @@ const type = Joi.string()
   .valid("income", "expense")
   .messages({ "any.only": "type must be either 'income' or 'expense'" });
 
-const amount = Joi.number().positive().messages({
+const amount = Joi.number().positive().max(1_000_000_000).messages({
   "number.base": "amount must be a number",
   "number.positive": "amount must be a positive number",
+  "number.max": "amount cannot exceed ₹1,000,000,000",
 });
 
 const startDate = Joi.date()
   .iso()
   .messages({ "date.format": "startDate must be an ISO 8601 date string" });
 
-const endDate = Joi.date().iso().greater(Joi.ref("startDate")).messages({
+const endDate = Joi.date().iso().min(Joi.ref("startDate")).messages({
   "date.format": "endDate must be an ISO 8601 date string",
-  "date.greater": "endDate must be after startDate",
+  "date.min": "endDate must be on or after startDate",
 });
 
 const paymentMethod = Joi.string()
@@ -82,11 +83,12 @@ export const updateRecurringSchema = Joi.object({
   category: objectId,
   frequency,
   startDate,
+
   endDate: Joi.date()
     .iso()
     .messages({ "date.format": "endDate must be an ISO 8601 date string" }),
   note: Joi.string().max(100).allow(""),
-  paymentMethod, // FIX M8: allow updating paymentMethod
+  paymentMethod,
   isActive: Joi.boolean(),
 })
   .min(1)

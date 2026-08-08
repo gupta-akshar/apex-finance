@@ -32,14 +32,9 @@ const EMPTY_FORM = {
 
 const inrFmt = (v) => `₹${Number(v).toLocaleString("en-IN")}`;
 
-const daysUntil = (dateStr) => {
-  if (!dateStr) return null;
-  return Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
-};
-
 const countdown = (dateStr) => {
-  const d = daysUntil(dateStr);
-  if (d === null) return null;
+  if (!dateStr) return null;
+  const d = Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
   if (d < 0) return "Overdue";
   if (d === 0) return "Today";
   if (d === 1) return "Tomorrow";
@@ -237,10 +232,19 @@ const RecurringForm = ({
   const validate = () => {
     const e = {};
     if (!form.title.trim()) e.title = "Title is required.";
-    if (!form.amount || Number(form.amount) <= 0)
+
+    const parsedAmount = parseFloat(form.amount);
+    if (!isFinite(parsedAmount) || parsedAmount <= 0)
       e.amount = "Enter a valid amount.";
+    if (parsedAmount > 1_000_000_000) e.amount = "Amount too large.";
+
     if (!form.category) e.category = "Select a category.";
     if (!form.startDate) e.startDate = "Start date is required.";
+
+    if (form.endDate && form.startDate && form.endDate < form.startDate) {
+      e.endDate = "End date must be on or after start date.";
+    }
+
     return e;
   };
 
@@ -376,7 +380,8 @@ const RecurringForm = ({
             disabled={loading}
           />
         </Field>
-        <Field label="End Date (optional)">
+        {/* FIX: min is set to startDate so browser prevents impossible range */}
+        <Field label="End Date (optional)" error={errors.endDate}>
           <input
             type="date"
             value={form.endDate}
@@ -416,22 +421,24 @@ const RecurringForm = ({
       </div>
 
       {/* Monthly preview */}
-      {form.amount && Number(form.amount) > 0 && (
-        <div className="mb-4 px-3 py-2 rounded-lg border border-[#27272a] bg-[#0f0f11]/60 flex items-center gap-2">
-          <span className="text-[11px] text-[#52525b]">
-            Monthly equivalent:
-          </span>
-          <span
-            className="text-sm font-semibold tabular-nums"
-            style={{
-              fontFamily: "'JetBrains Mono',monospace",
-              color: tc?.text ?? "#e4e4e7",
-            }}
-          >
-            {inrFmt(toMonthly(form.amount, form.frequency).toFixed(0))}
-          </span>
-        </div>
-      )}
+      {form.amount &&
+        isFinite(parseFloat(form.amount)) &&
+        parseFloat(form.amount) > 0 && (
+          <div className="mb-4 px-3 py-2 rounded-lg border border-[#27272a] bg-[#0f0f11]/60 flex items-center gap-2">
+            <span className="text-[11px] text-[#52525b]">
+              Monthly equivalent:
+            </span>
+            <span
+              className="text-sm font-semibold tabular-nums"
+              style={{
+                fontFamily: "'JetBrains Mono',monospace",
+                color: tc?.text ?? "#e4e4e7",
+              }}
+            >
+              {inrFmt(toMonthly(form.amount, form.frequency).toFixed(0))}
+            </span>
+          </div>
+        )}
 
       <div className="flex gap-2">
         <button
@@ -588,6 +595,7 @@ const RecurringTransactions = () => {
   const [filterFreq, setFilterFreq] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [search, setSearch] = useState("");
+  const [apiError, setApiError] = useState("");
 
   const { categories } = useCategories();
 
@@ -598,7 +606,11 @@ const RecurringTransactions = () => {
         const data = await getRecurringTransactions();
         if (!cancelled) setItems(data);
       } catch (err) {
-        if (!cancelled) console.error("Failed to load recurring:", err);
+        if (!cancelled)
+          setApiError(
+            err?.response?.data?.message ||
+              "Failed to load recurring transactions.",
+          );
       } finally {
         if (!cancelled) setPageLoading(false);
       }
@@ -643,6 +655,7 @@ const RecurringTransactions = () => {
 
   const handleSave = async (formData) => {
     setSaving(true);
+    setApiError("");
     try {
       if (editTarget) {
         const updated = await updateRecurringTransaction(
@@ -659,7 +672,9 @@ const RecurringTransactions = () => {
       }
       setShowForm(false);
     } catch (err) {
-      console.error("Save failed:", err);
+      setApiError(
+        err?.response?.data?.message || "Failed to save. Please try again.",
+      );
     } finally {
       setSaving(false);
     }
@@ -671,7 +686,7 @@ const RecurringTransactions = () => {
       await deleteRecurringTransaction(deleteTarget._id);
       setItems((prev) => prev.filter((i) => i._id !== deleteTarget._id));
     } catch (err) {
-      console.error("Delete failed:", err);
+      setApiError(err?.response?.data?.message || "Failed to delete.");
     } finally {
       setDeleteTarget(null);
     }
@@ -679,6 +694,7 @@ const RecurringTransactions = () => {
 
   const handleToggle = async (id, currentIsActive) => {
     const nextIsActive = !currentIsActive;
+    // Optimistic update
     setItems((prev) =>
       prev.map((i) => (i._id === id ? { ...i, isActive: nextIsActive } : i)),
     );
@@ -693,12 +709,13 @@ const RecurringTransactions = () => {
         ),
       );
     } catch (err) {
-      console.error("Toggle failed:", err);
+      // Revert on failure
       setItems((prev) =>
         prev.map((i) =>
           i._id === id ? { ...i, isActive: currentIsActive } : i,
         ),
       );
+      setApiError("Failed to update status. Please try again.");
     } finally {
       setToggling(null);
     }
@@ -771,7 +788,7 @@ const RecurringTransactions = () => {
         />
       </div>
 
-      {/* ── Toolbar ── */}
+      {/* Toolbar */}
       <div className="sticky top-0 z-10 border-b border-[#27272a] bg-[#0a0a0c]/95 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 md:px-8 py-3 flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[160px] max-w-xs">
@@ -848,7 +865,7 @@ const RecurringTransactions = () => {
         </div>
       </div>
 
-      {/* ── Content ── */}
+      {/* Content */}
       <div className="relative z-10 max-w-6xl mx-auto px-6 md:px-8 py-7 space-y-6">
         <div>
           <h1
@@ -862,6 +879,20 @@ const RecurringTransactions = () => {
           </p>
         </div>
 
+        {/* API Error Banner */}
+        {apiError && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-[#f87171]/20 bg-[#f87171]/8">
+            <p className="text-sm text-[#f87171]">{apiError}</p>
+            <button
+              onClick={() => setApiError("")}
+              className="text-[#f87171]/60 hover:text-[#f87171] text-xs transition-colors shrink-0"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Stats strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             {
