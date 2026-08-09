@@ -19,15 +19,30 @@ import healthRoutes from "./routes/health.routes.js";
 
 import { notFound, errorHandler } from "./middlewares/error.middleware.js";
 
-// ─── Rate limiter ─────────────────────────────────────────────────────────────
+// ─── Rate limiters ────────────────────────────────────────────────────────────
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+
+  keyGenerator: (req) => {
+    return req.user?._id?.toString() || req.ip;
+  },
   message: {
     success: false,
     message: "Too many requests, please try again after 15 minutes.",
+  },
+});
+
+const analyticsLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30,
+  keyGenerator: (req) => req.user?._id?.toString() || req.ip,
+  message: {
+    success: false,
+    message: "Too many analytics requests. Please slow down.",
   },
 });
 
@@ -36,7 +51,7 @@ const app = express();
 app.set("etag", false);
 app.set("trust proxy", 1);
 
-// ─── Helmet — security headers + CSP ─────────────────────────────────────────
+// ─── Helmet ───────────────────────────────────────────────────────────────────
 const clientOrigin = process.env.CLIENT_URL || "http://localhost:5173";
 const clientHost = (() => {
   try {
@@ -51,8 +66,8 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:"],
         connectSrc: [
           "'self'",
@@ -69,12 +84,13 @@ app.use(
           "https://fonts.googleapis.com",
         ],
         frameAncestors: ["'none'"],
-        upgradeInsecureRequests: [],
+        ...(process.env.NODE_ENV === "production"
+          ? { upgradeInsecureRequests: [] }
+          : {}),
       },
     },
     frameguard: { action: "deny" },
     noSniff: true,
-    xssFilter: true,
     hsts:
       process.env.NODE_ENV === "production"
         ? { maxAge: 31_536_000, includeSubDomains: true, preload: true }
@@ -88,17 +104,15 @@ app.use(
   cors({
     origin: clientOrigin,
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
-// ─── Request logging (pino-http) ──────────────────────────────────────────────
-
+// ─── Request logging ──────────────────────────────────────────────────────────
 app.use(
   pinoHttp({
     logger,
-
-    // ── Correlation ID ───────────────────────────────────────────────────────
-
     genReqId: (req, res) => {
       const forwarded = req.headers["x-request-id"];
       if (forwarded) return forwarded;
@@ -106,25 +120,18 @@ app.use(
       res.setHeader("X-Request-Id", id);
       return id;
     },
-
-    // ── Log level by outcome ─────────────────────────────────────────────────
-
     customLogLevel: (req, res, err) => {
       if (req.url === "/api/health") return "silent";
       if (err || res.statusCode >= 500) return "error";
       if (res.statusCode >= 400) return "warn";
       return "info";
     },
-
-    // ── Request serialiser ───────────────────────────────────────────────────
-
     serializers: {
       req(req) {
         return {
           id: req.id,
           method: req.method,
           url: req.url,
-          // Omit the full headers object; only surface what aids debugging.
           userAgent: req.headers?.["user-agent"],
           remoteAddress: req.remoteAddress,
         };
@@ -133,7 +140,6 @@ app.use(
         return { statusCode: res.statusCode };
       },
     },
-
     customSuccessMessage: (req, res) =>
       `${req.method} ${req.url} → ${res.statusCode}`,
     customErrorMessage: (req, res, err) =>
@@ -158,7 +164,7 @@ app.use("/api", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/analytics", analyticsRoutes);
+app.use("/api/analytics", analyticsLimiter, analyticsRoutes);
 app.use("/api/budgets", budgetRoutes);
 app.use("/api/recurring", recurringRoutes);
 app.use("/api/categories", categoryRoutes);

@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
-import User from "../models/User.js";
 import mongoose from "mongoose";
+import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
 import Category from "../models/Category.js";
 import Budget from "../models/Budget.js";
@@ -8,37 +8,49 @@ import RecurringTransaction from "../models/RecurringTransaction.js";
 
 const isProd = process.env.NODE_ENV === "production";
 
-const isTransactionUnsupportedError = (err) =>
-  err?.code === 20 ||
-  err?.codeName === "IllegalOperation" ||
-  (typeof err?.message === "string" &&
-    err.message.includes("Transaction numbers are only allowed"));
+// ─── Deletion tombstone schema ─────────────────────────────────────────────────
+const deletionTombstoneSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    unique: true,
+  },
+  requestedAt: { type: Date, default: Date.now },
+  status: {
+    type: String,
+    enum: ["pending", "completed"],
+    default: "pending",
+  },
+  completedAt: { type: Date },
+});
 
-const deleteUserData = async (userId, session) => {
-  const opts = session ? { session } : {};
-  await Transaction.deleteMany({ user: userId }, opts);
-  await Category.deleteMany({ user: userId }, opts);
-  await Budget.deleteMany({ user: userId }, opts);
-  await RecurringTransaction.deleteMany({ user: userId }, opts);
+const DeletionTombstone =
+  mongoose.models.DeletionTombstone ||
+  mongoose.model("DeletionTombstone", deletionTombstoneSchema);
 
-  await User.findByIdAndDelete(userId, opts);
+// ─── Sequential delete with tombstone ────────────────────────────────────────
+
+const deleteUserData = async (userId) => {
+  await Transaction.deleteMany({ user: userId });
+  await Category.deleteMany({ user: userId });
+  await Budget.deleteMany({ user: userId });
+  await RecurringTransaction.deleteMany({ user: userId });
+  await User.findByIdAndDelete(userId);
 };
 
 // ─── CONTROLLERS ─────────────────────────────────────────────────────────────
 
-// @route   GET /api/users/profile
-// @access  Private
 export const getUserProfile = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id).select("-password");
+    const user = await User.findById(req.user._id).select(
+      "-password -refreshTokenHash",
+    );
     res.status(200).json(user);
   } catch (error) {
     next(error);
   }
 };
 
-// @route   PUT /api/users/profile
-// @access  Private
 export const updateUserProfile = async (req, res, next) => {
   try {
     const { name, currency } = req.body;
@@ -49,7 +61,7 @@ export const updateUserProfile = async (req, res, next) => {
     }
 
     if (name) user.name = name;
-    if (currency) user.currency = currency;
+    if (currency) user.currency = currency.toUpperCase();
 
     const updatedUser = await user.save();
     res.status(200).json({
@@ -63,8 +75,6 @@ export const updateUserProfile = async (req, res, next) => {
   }
 };
 
-// @route   PUT /api/users/change-password
-// @access  Private
 export const changePassword = async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -74,7 +84,7 @@ export const changePassword = async (req, res, next) => {
     }
 
     const user = await User.findById(req.user._id).select(
-      "+password +refreshToken",
+      "+password +refreshTokenHash",
     );
 
     const isMatch = await user.comparePassword(currentPassword);
@@ -83,14 +93,14 @@ export const changePassword = async (req, res, next) => {
     }
 
     user.password = newPassword;
-    user.refreshToken = null;
+    user.refreshTokenHash = null;
     await user.save();
 
     res
       .clearCookie("refreshToken", {
         httpOnly: true,
         secure: isProd,
-        sameSite: isProd ? "none" : "lax",
+        sameSite: isProd ? "none" : "strict",
       })
       .status(200)
       .json({ message: "Password updated. Please log in again." });
@@ -98,9 +108,6 @@ export const changePassword = async (req, res, next) => {
     next(error);
   }
 };
-
-// @route   POST /api/users/close-account
-// @access  Private
 
 export const deleteAccount = async (req, res, next) => {
   const { currentPassword } = req.body;
@@ -128,39 +135,31 @@ export const deleteAccount = async (req, res, next) => {
   }
 
   const userId = req.user._id;
-  const session = await mongoose.startSession();
 
   try {
-    session.startTransaction();
-    await deleteUserData(userId, session);
-    await session.commitTransaction();
-  } catch (txError) {
-    await session.abortTransaction();
+    await DeletionTombstone.findOneAndUpdate(
+      { userId },
+      {
+        $set: { requestedAt: new Date(), status: "pending", completedAt: null },
+      },
+      { upsert: true },
+    );
 
-    if (isTransactionUnsupportedError(txError)) {
-      console.warn(
-        "[deleteAccount] Falling back to sequential deletes " +
-          "(standalone MongoDB detected — no replica set). " +
-          "For full atomicity, run MongoDB as a replica set.",
-      );
+    await deleteUserData(userId);
 
-      try {
-        await deleteUserData(userId, null);
-      } catch (fallbackError) {
-        return next(fallbackError);
-      }
-    } else {
-      return next(txError);
-    }
-  } finally {
-    await session.endSession();
+    await DeletionTombstone.findOneAndUpdate(
+      { userId },
+      { $set: { status: "completed", completedAt: new Date() } },
+    );
+  } catch (error) {
+    return next(error);
   }
 
   res
     .clearCookie("refreshToken", {
       httpOnly: true,
       secure: isProd,
-      sameSite: isProd ? "none" : "lax",
+      sameSite: isProd ? "none" : "strict",
     })
     .status(200)
     .json({ message: "Account deleted successfully" });
