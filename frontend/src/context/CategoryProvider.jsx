@@ -1,10 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import CategoryContext from "./CategoryContext";
 import { getCategories } from "../api/categoryApi";
-import {
-  registerCategoryInvalidate,
-  unregisterCategoryInvalidate,
-} from "../hooks/useCategories";
 
 export const CategoryProvider = ({ children }) => {
   const [categories, setCategories] = useState([]);
@@ -12,8 +8,6 @@ export const CategoryProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   const mountedRef = useRef(true);
-  const abortRef = useRef(null);
-  const fetchIdRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -23,47 +17,37 @@ export const CategoryProvider = ({ children }) => {
   }, []);
 
   const fetchCategories = useCallback(async () => {
-    if (abortRef.current) abortRef.current.abort();
-
     const controller = new AbortController();
-    abortRef.current = controller;
-    const currentId = ++fetchIdRef.current;
+    const { signal } = controller;
 
     setLoading(true);
     setError(null);
 
     try {
-      const data = await getCategories({ signal: controller.signal });
-
-      if (!mountedRef.current || currentId !== fetchIdRef.current) return;
-
+      const data = await getCategories({ signal });
+      if (!mountedRef.current || signal.aborted) return;
       setCategories(data);
     } catch (err) {
-      if (!mountedRef.current || currentId !== fetchIdRef.current) return;
+      if (!mountedRef.current || signal.aborted) return;
       if (err?.name === "CanceledError" || err?.name === "AbortError") return;
-
-      console.error("CategoryProvider fetch error:", err);
       setError(
         err?.response?.data?.message ||
           err?.message ||
           "Failed to load categories.",
       );
     } finally {
-      if (mountedRef.current && currentId === fetchIdRef.current) {
+      if (mountedRef.current && !signal.aborted) {
         setLoading(false);
       }
     }
+
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
-    registerCategoryInvalidate(fetchCategories);
-    return () => unregisterCategoryInvalidate();
-  }, [fetchCategories]);
-
-  useEffect(() => {
-    fetchCategories();
+    const cleanup = fetchCategories();
     return () => {
-      if (abortRef.current) abortRef.current.abort();
+      cleanup?.then?.((fn) => fn?.());
     };
   }, [fetchCategories]);
 
@@ -73,6 +57,7 @@ export const CategoryProvider = ({ children }) => {
         categories,
         loading,
         error,
+
         invalidate: fetchCategories,
       }}
     >
