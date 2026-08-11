@@ -28,70 +28,54 @@ export const TransactionProvider = ({ children }) => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   const [pagination, setPagination] = useState({
     total: 0,
     page: 1,
     pages: 1,
     limit: 10,
   });
-
   const [filters, setFiltersState] = useState(DEFAULT_FILTERS);
 
-  const abortRef = useRef(null);
+  const fetchTransactions = useCallback(
+    async (signal) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
-  const fetchTransactions = useCallback(async () => {
-    if (abortRef.current) {
-      abortRef.current.abort();
-    }
+        const data = await getTransactions(filters, { signal });
+
+        const raw = data.transactions || [];
+        setTransactions(raw.map(normalizeTransaction));
+        setPagination(
+          data.pagination ?? { total: 0, page: 1, pages: 1, limit: 10 },
+        );
+      } catch (err) {
+        if (
+          err?.name === "AbortError" ||
+          err?.name === "CanceledError" ||
+          err?.code === "ERR_CANCELED"
+        ) {
+          return; // Request was intentionally cancelled — not an error
+        }
+        setError(
+          err?.response?.data?.message || "Failed to load transactions.",
+        );
+      } finally {
+        // Only clear loading if this request was not aborted
+        if (!signal?.aborted) {
+          setLoading(false);
+        }
+      }
+    },
+    [filters],
+  );
+
+  useEffect(() => {
     const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      const data = await getTransactions(filters, {
-        signal: controller.signal,
-      });
-
-      // If this request was superseded (aborted), do not update state.
-      if (controller.signal.aborted) return;
-
-      const raw = data.transactions || [];
-      setTransactions(raw.map(normalizeTransaction));
-      setPagination(
-        data.pagination ?? { total: 0, page: 1, pages: 1, limit: 10 },
-      );
-    } catch (err) {
-      if (
-        err?.name === "AbortError" ||
-        err?.name === "CanceledError" ||
-        err?.code === "ERR_CANCELED"
-      ) {
-        return;
-      }
-      console.error("FETCH ERROR:", err);
-      setError(err?.response?.data?.message || "Failed to load transactions.");
-    } finally {
-      // Only clear loading if THIS request is still the active one.
-      if (!controller.signal.aborted) {
-        setLoading(false);
-      }
-    }
-  }, [filters]);
-
-  // Abort on unmount to prevent state updates on an unmounted component.
-  useEffect(() => {
+    fetchTransactions(controller.signal);
     return () => {
-      if (abortRef.current) abortRef.current.abort();
+      controller.abort();
     };
-  }, []);
-
-  // Auto-refetch when filters change.
-  useEffect(() => {
-    fetchTransactions();
   }, [fetchTransactions]);
 
   // ── setFilters ─────────────────────────────────────────────────────────────
@@ -99,21 +83,17 @@ export const TransactionProvider = ({ children }) => {
     setFiltersState((prev) => {
       const next =
         typeof updater === "function" ? updater(prev) : { ...prev, ...updater };
-
       const changedKeys = Object.keys(next).filter((k) => next[k] !== prev[k]);
       const onlyPageChanged =
         changedKeys.length === 1 && changedKeys[0] === "page";
-
       return onlyPageChanged ? next : { ...next, page: 1 };
     });
   }, []);
 
-  // ── Convenience page setter ────────────────────────────────────────────────
   const setPage = useCallback((page) => {
     setFiltersState((prev) => ({ ...prev, page }));
   }, []);
 
-  // ── Reset all filters ──────────────────────────────────────────────────────
   const resetFilters = useCallback(() => {
     setFiltersState(DEFAULT_FILTERS);
   }, []);
@@ -121,19 +101,18 @@ export const TransactionProvider = ({ children }) => {
   // ── ADD ───────────────────────────────────────────────────────────────────
   const addTransaction = useCallback(
     async (tx) => {
-      try {
-        const res = await createTransaction(tx);
-        const newTx = res.transaction || res;
-        await fetchTransactions();
-        return {
-          transaction: normalizeTransaction(newTx),
-          budgetWarning: res.budgetWarning ?? false,
-          warningMessage: res.warningMessage ?? "",
-        };
-      } catch (err) {
-        console.error("ADD ERROR:", err);
-        throw err;
-      }
+      const res = await createTransaction(tx);
+      const newTx = res.transaction || res;
+
+      // Re-fetch to get server-sorted, server-paginated data
+      const controller = new AbortController();
+      await fetchTransactions(controller.signal);
+
+      return {
+        transaction: normalizeTransaction(newTx),
+        budgetWarning: res.budgetWarning ?? false,
+        warningMessage: res.warningMessage ?? "",
+      };
     },
     [fetchTransactions],
   );
@@ -141,43 +120,42 @@ export const TransactionProvider = ({ children }) => {
   // ── DELETE ────────────────────────────────────────────────────────────────
   const removeTransaction = useCallback(
     async (id) => {
-      try {
-        await deleteTransaction(id);
-        // Optimistic UI: remove from local state immediately for responsiveness
-        setTransactions((prev) => prev.filter((t) => t._id !== id));
-        // Then refetch to get accurate pagination totals
-        await fetchTransactions();
-      } catch (err) {
-        console.error("DELETE ERROR:", err);
-        throw err;
-      }
+      await deleteTransaction(id);
+      // Optimistic removal for immediate UI feedback
+      setTransactions((prev) => prev.filter((t) => t._id !== id));
+      // Then re-fetch so pagination total is accurate
+      const controller = new AbortController();
+      await fetchTransactions(controller.signal);
     },
     [fetchTransactions],
   );
 
+  // ── EDIT ──────────────────────────────────────────────────────────────────
   const editTransaction = useCallback(
     async (id, updatedData) => {
-      try {
-        const res = await updateTransaction(id, updatedData);
-        const updated = res.transaction || res;
-        const normalized = normalizeTransaction(updated);
+      const res = await updateTransaction(id, updatedData);
+      const updated = res.transaction || res;
+      const normalized = normalizeTransaction(updated);
 
-        // Optimistic update: immediately reflect the change in the visible list
-        setTransactions((prev) =>
-          prev.map((t) => (t._id === id ? normalized : t)),
-        );
+      // Optimistic update for immediate UI feedback
+      setTransactions((prev) =>
+        prev.map((t) => (t._id === id ? normalized : t)),
+      );
 
-        // Refetch to re-sort, re-paginate, and sync filter counts.
-        await fetchTransactions();
+      // Re-fetch to re-sort and re-paginate
+      const controller = new AbortController();
+      await fetchTransactions(controller.signal);
 
-        return normalized;
-      } catch (err) {
-        console.error("UPDATE ERROR:", err);
-        throw err;
-      }
+      return normalized;
     },
     [fetchTransactions],
   );
+
+  // ── Manual refresh ────────────────────────────────────────────────────────
+  const refreshTransactions = useCallback(() => {
+    const controller = new AbortController();
+    fetchTransactions(controller.signal);
+  }, [fetchTransactions]);
 
   return (
     <TransactionContext.Provider
@@ -193,7 +171,7 @@ export const TransactionProvider = ({ children }) => {
         addTransaction,
         removeTransaction,
         editTransaction,
-        fetchTransactions,
+        fetchTransactions: refreshTransactions,
       }}
     >
       {children}
