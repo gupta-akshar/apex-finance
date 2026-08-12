@@ -30,7 +30,7 @@ const buildMonthlyBuckets = (rawTrend = []) => {
   }));
 
   rawTrend.forEach(({ month, type, total }) => {
-    const idx = month - 1; // server is 1-based
+    const idx = month - 1;
     if (idx < 0 || idx > 11) return;
     if (type === "income") buckets[idx].income = total;
     if (type === "expense") buckets[idx].expense = total;
@@ -45,7 +45,12 @@ const toPieData = (categories = []) =>
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 const useDashboardAnalytics = () => {
-  const currentYear = new Date().getFullYear();
+  // FIX: compute currentYear inside state initialiser so it's always fresh
+  // on mount. If the user keeps the page open past midnight Dec 31, a manual
+  // refresh (or the invalidate call) will pick up the new year.
+  const [currentYear, setCurrentYear] = useState(() =>
+    new Date().getFullYear(),
+  );
 
   const [stats, setStats] = useState({
     totalIncome: 0,
@@ -60,25 +65,21 @@ const useDashboardAnalytics = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const abortRef = useRef(null);
-
-  const load = useCallback(async () => {
-    if (abortRef.current) abortRef.current.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const { signal } = controller;
-
+  const load = useCallback(async (signal) => {
     setLoading(true);
     setError(null);
+
+    const year = new Date().getFullYear();
+    setCurrentYear(year);
 
     try {
       const [overview, trendRaw, expenseCats] = await Promise.all([
         fetchOverview({ signal }),
-        fetchMonthlyTrend(currentYear, { signal }),
-        fetchCategoryBreakdown("expense", null, currentYear, { signal }),
+        fetchMonthlyTrend(year, { signal }),
+        fetchCategoryBreakdown("expense", null, year, { signal }),
       ]);
 
-      if (controller.signal.aborted) return;
+      if (signal?.aborted) return;
 
       setStats({
         totalIncome: overview.totalIncome ?? 0,
@@ -86,37 +87,39 @@ const useDashboardAnalytics = () => {
         balance: overview.balance ?? 0,
         transactionsCount: overview.transactionsCount ?? 0,
       });
-
       setMonthlyData(buildMonthlyBuckets(trendRaw));
-
       setCategoryData(toPieData(expenseCats));
     } catch (err) {
       if (err?.name === "CanceledError" || err?.name === "AbortError") return;
-      console.error("useDashboardAnalytics error:", err);
       setError(
         err?.response?.data?.message ||
           err?.message ||
           "Failed to load dashboard analytics.",
       );
     } finally {
-      if (!controller.signal.aborted) setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
-  }, [currentYear]);
+  }, []);
 
   useEffect(() => {
-    load();
-    return () => {
-      if (abortRef.current) abortRef.current.abort();
-    };
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+
+  const refresh = useCallback(() => {
+    const controller = new AbortController();
+    load(controller.signal);
   }, [load]);
 
   return {
     stats,
     monthlyData,
     categoryData,
+    currentYear,
     loading,
     error,
-    refresh: load,
+    refresh,
   };
 };
 
