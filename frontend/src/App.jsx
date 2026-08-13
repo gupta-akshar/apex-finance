@@ -6,6 +6,7 @@ import { useAuth } from "./hooks/useAuth";
 import { ROUTES } from "./constants/routes.js";
 
 import Layout from "./layout/Layout";
+import RouteErrorBoundary from "./components/RouteErrorBoundary.jsx";
 
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
@@ -37,10 +38,8 @@ const PublicRoute = ({ children }) => {
 function App() {
   return (
     <Routes>
-      {/* Landing */}
       <Route path={ROUTES.HOME} element={<LandingPage />} />
 
-      {/* Public (unauthenticated) routes */}
       <Route
         path={ROUTES.LOGIN}
         element={
@@ -58,7 +57,6 @@ function App() {
         }
       />
 
-      {/* Protected routes — wrapped in CategoryProvider + TransactionProvider */}
       <Route
         element={
           <ProtectedRoute>
@@ -70,14 +68,48 @@ function App() {
           </ProtectedRoute>
         }
       >
-        <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
-        <Route path={ROUTES.TRANSACTIONS} element={<Transactions />} />
-        <Route path={ROUTES.CATEGORIES} element={<Categories />} />
-        <Route path={ROUTES.REPORTS} element={<Reports />} />
-        <Route path={ROUTES.RECURRING} element={<Recurring />} />
+        <Route
+          path={ROUTES.DASHBOARD}
+          element={
+            <RouteErrorBoundary routeName="Dashboard">
+              <Dashboard />
+            </RouteErrorBoundary>
+          }
+        />
+        <Route
+          path={ROUTES.TRANSACTIONS}
+          element={
+            <RouteErrorBoundary routeName="Transactions">
+              <Transactions />
+            </RouteErrorBoundary>
+          }
+        />
+        <Route
+          path={ROUTES.CATEGORIES}
+          element={
+            <RouteErrorBoundary routeName="Categories">
+              <Categories />
+            </RouteErrorBoundary>
+          }
+        />
+        <Route
+          path={ROUTES.REPORTS}
+          element={
+            <RouteErrorBoundary routeName="Reports">
+              <Reports />
+            </RouteErrorBoundary>
+          }
+        />
+        <Route
+          path={ROUTES.RECURRING}
+          element={
+            <RouteErrorBoundary routeName="Recurring">
+              <Recurring />
+            </RouteErrorBoundary>
+          }
+        />
       </Route>
 
-      {/* Catch-all */}
       <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>
   );
