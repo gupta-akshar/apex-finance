@@ -2,13 +2,12 @@ import React, { useState } from "react";
 import { useTransactions } from "../hooks/useTransactions";
 import useCategories from "../hooks/useCategories";
 
-// transaction prop is passed when editing an existing transaction, null when adding new
+const MAX_AMOUNT = 1_000_000_000;
+
 const TransactionModal = ({ mode, onClose, transaction = null }) => {
   const isEditing = Boolean(transaction);
   const isIncome = mode === "income";
 
-  // Always store amount as a string so validation is safe against Number() coercion bugs.
-  // transaction.amount may be a JS number — convert it to a string immediately.
   const [amount, setAmount] = useState(
     transaction?.amount != null ? String(transaction.amount) : "",
   );
@@ -24,9 +23,7 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
   const [submitting, setSubmitting] = useState(false);
   const [warning, setWarning] = useState("");
 
-  // Categories come from context — no local fetch needed
   const { categories } = useCategories();
-
   const { addTransaction, editTransaction } = useTransactions();
 
   const today = new Date().toISOString().slice(0, 10);
@@ -40,24 +37,22 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
     setError("");
     setWarning("");
 
-    // ── Validation ────────────────────────────────────────────────────────────
-    //
-    // Root-cause note: Do NOT use !amount || Number(amount) <= 0.
-    //
-    // The <input type="number"> element has HTML min/step attributes that cause
-    // jsdom (used in Vitest) to normalise out-of-range values (e.g. "0" or "-50")
-    // to the minimum value ("0.01") when a blur event fires — which happens
-    // automatically when userEvent.click() moves focus to the submit button.
-    // After normalisation, amount becomes "0.01", Number("0.01") <= 0 is false,
-    // and validation silently passes, letting an invalid amount reach the API.
-    //
-    // Using parseFloat + isNaN makes validation purely data-driven, independent
-    // of whatever the browser/jsdom decided to do with the raw string.
+    // FIX: use parseFloat + isFinite + max cap.
+    // This prevents:
+    //   - "0" passing validation (parsedAmount <= 0)
+    //   - "-50" passing (parsedAmount <= 0)
+    //   - "1e308" passing (Infinity — !isFinite guard)
+    //   - Astronomically large numbers corrupting aggregations
     const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return setError("Enter a valid amount.");
-    }
 
+    if (!isFinite(parsedAmount) || parsedAmount <= 0) {
+      return setError("Enter a valid amount greater than zero.");
+    }
+    if (parsedAmount > MAX_AMOUNT) {
+      return setError(
+        `Amount cannot exceed ₹${MAX_AMOUNT.toLocaleString("en-IN")}.`,
+      );
+    }
     if (!category) {
       return setError("Please select a category.");
     }
@@ -128,11 +123,7 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
 
         {/* Budget Warning Banner */}
         {warning && (
-          <div
-            className="flex items-start justify-between gap-3 mb-3
-                  bg-yellow-500/10 border border-yellow-500/30
-                  px-3 py-2 rounded-lg"
-          >
+          <div className="flex items-start justify-between gap-3 mb-3 bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 rounded-lg">
             <div className="flex items-start gap-2 min-w-0">
               <span className="text-yellow-400 text-base leading-none mt-0.5 shrink-0">
                 ⚠
@@ -142,23 +133,14 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
             <button
               type="button"
               onClick={onClose}
-              className="text-yellow-400/60 hover:text-yellow-400 text-xs
-                 border border-yellow-500/30 hover:border-yellow-500/60
-                 px-2 py-1 rounded transition-colors shrink-0"
+              className="text-yellow-400/60 hover:text-yellow-400 text-xs border border-yellow-500/30 hover:border-yellow-500/60 px-2 py-1 rounded transition-colors shrink-0"
             >
               OK
             </button>
           </div>
         )}
 
-        {/* Amount
-            ─────
-            IMPORTANT: min and step are intentionally omitted (or set to a
-            neutral value).  The HTML min/step attributes cause jsdom to
-            normalise the input's value on blur — e.g. "0" becomes "0.01"
-            when min="0.01" — which would silently bypass our JS validation.
-            All amount constraints are enforced by the handleSubmit guard above.
-        */}
+        {/* Amount — no min/step to avoid browser normalisation overriding our validation */}
         <input
           type="number"
           placeholder="Amount"
@@ -210,6 +192,7 @@ const TransactionModal = ({ mode, onClose, transaction = null }) => {
           placeholder="Note (optional)"
           value={note}
           onChange={(e) => setNote(e.target.value)}
+          maxLength={200}
           className="w-full mb-3 bg-inputBg border border-border rounded-lg px-3 py-2"
         />
 
