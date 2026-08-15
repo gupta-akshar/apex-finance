@@ -29,10 +29,19 @@ const fmtDate = (d) => {
   const date = new Date(d);
   const today = new Date();
   const yest = new Date();
-  yest.setDate(today.getDate() - 1);
-  if (date.toDateString() === today.toDateString()) return "Today";
-  if (date.toDateString() === yest.toDateString()) return "Yesterday";
-  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  yest.setUTCDate(today.getUTCDate() - 1);
+
+  const dStr = `${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`;
+  const todayS = `${today.getUTCFullYear()}-${today.getUTCMonth()}-${today.getUTCDate()}`;
+  const yesterS = `${yest.getUTCFullYear()}-${yest.getUTCMonth()}-${yest.getUTCDate()}`;
+
+  if (dStr === todayS) return "Today";
+  if (dStr === yesterS) return "Yesterday";
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
 };
 
 const QABtn = ({ label, onClick, variant = "default", icon }) => {
@@ -153,6 +162,7 @@ const Dashboard = () => {
     stats,
     monthlyData,
     categoryData,
+    currentYear,
     loading: analyticsLoading,
     error: analyticsError,
     refresh: refreshAnalytics,
@@ -201,7 +211,7 @@ const Dashboard = () => {
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-8 py-8 space-y-8">
-        {/* ── Header ── */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#52525b] mb-1">
@@ -228,7 +238,6 @@ const Dashboard = () => {
               variant="expense"
               onClick={() => setModalMode("expense")}
             />
-            {/* L5 fix: ROUTES constants instead of hardcoded strings */}
             <QABtn
               icon="↺"
               label="Recurring"
@@ -246,9 +255,9 @@ const Dashboard = () => {
           <AnalyticsError message={analyticsError} onRetry={refreshAnalytics} />
         )}
 
-        {/* ── Stats cards ── */}
+        {/* Stats */}
         <div>
-          <SectionLabel>Overview</SectionLabel>
+          <SectionLabel>Overview — {currentYear}</SectionLabel>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <SummaryCard
               title="Net Balance"
@@ -317,7 +326,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* ── Charts + Recent ── */}
+        {/* Charts + Recent */}
         <div className="grid lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 space-y-5">
             <SectionLabel>Analytics</SectionLabel>
@@ -340,7 +349,6 @@ const Dashboard = () => {
                 >
                   Latest transactions
                 </p>
-                {/* L5 fix */}
                 <button
                   onClick={() => navigate(ROUTES.TRANSACTIONS)}
                   className="text-[11px] text-[#6366f1] hover:text-[#818cf8] transition-colors font-medium"
@@ -384,7 +392,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* ── Quick access ── */}
+        {/* Quick access */}
         <div>
           <SectionLabel>Quick access</SectionLabel>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

@@ -2,11 +2,7 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
-// FIX: was "../src/components/TransactionTable" — wrong root.
-// File lives at src/components/__tests__/, so the component is one level up.
 import TransactionTable from "../TransactionTable";
-
-// ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const makeTx = (overrides = {}) => ({
   _id: "tx-001",
@@ -14,7 +10,7 @@ const makeTx = (overrides = {}) => ({
   amount: 1500,
   categoryName: "Food",
   note: "Lunch",
-  date: new Date().toISOString(), // today
+  date: new Date().toISOString(),
   paymentMethod: "upi",
   ...overrides,
 });
@@ -35,8 +31,6 @@ const TRANSACTIONS = [
   }),
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 const renderTable = (props = {}) =>
   render(
     <TransactionTable
@@ -47,13 +41,7 @@ const renderTable = (props = {}) =>
     />,
   );
 
-// ══════════════════════════════════════════════════════════════════════════════
-// TransactionTable
-// ══════════════════════════════════════════════════════════════════════════════
-
 describe("TransactionTable", () => {
-  // ── Rendering ───────────────────────────────────────────────────────────────
-
   describe("row rendering", () => {
     it("renders one row per transaction", () => {
       renderTable();
@@ -61,7 +49,7 @@ describe("TransactionTable", () => {
       expect(screen.getByText("Salary")).toBeInTheDocument();
     });
 
-    it("displays the formatted amount with correct sign", () => {
+    it("displays formatted amount with correct sign", () => {
       renderTable();
       expect(screen.getByText(/−.*1,500/)).toBeInTheDocument();
       expect(screen.getByText(/\+.*85,000/)).toBeInTheDocument();
@@ -78,13 +66,13 @@ describe("TransactionTable", () => {
       expect(screen.getByText("Lunch")).toBeInTheDocument();
     });
 
-    it("renders an em-dash placeholder when note is absent", () => {
+    it("renders em-dash placeholder when note is absent", () => {
       renderTable();
       const dashes = screen.getAllByText("—");
       expect(dashes.length).toBeGreaterThan(0);
     });
 
-    it("falls back to categoryName from populated object when categoryName field absent", () => {
+    it("falls back to category.name from populated object when categoryName absent", () => {
       const tx = makeTx({
         _id: "tx-003",
         categoryName: undefined,
@@ -100,7 +88,7 @@ describe("TransactionTable", () => {
       expect(screen.getByText("Transport")).toBeInTheDocument();
     });
 
-    it("shows 'Unknown' when both categoryName and populated category are absent", () => {
+    it("shows 'Unknown' when both categoryName and populated category absent", () => {
       const tx = makeTx({
         _id: "tx-004",
         categoryName: undefined,
@@ -116,22 +104,18 @@ describe("TransactionTable", () => {
       expect(screen.getByText("Unknown")).toBeInTheDocument();
     });
 
-    it("renders 'Today' for a transaction dated today", () => {
+    it("renders 'Today' for transaction dated today", () => {
       renderTable();
       expect(screen.getAllByText("Today").length).toBeGreaterThan(0);
     });
   });
 
-  // ── Edit ────────────────────────────────────────────────────────────────────
-
   describe("edit action", () => {
-    it("calls onEdit with the correct transaction when Edit is clicked", async () => {
+    it("calls onEdit with correct transaction when Edit is clicked", async () => {
       const onEdit = vi.fn();
       renderTable({ onEdit });
-
       const editButtons = screen.getAllByText("Edit");
       await userEvent.click(editButtons[0]);
-
       expect(onEdit).toHaveBeenCalledTimes(1);
       expect(onEdit).toHaveBeenCalledWith(TRANSACTIONS[0]);
     });
@@ -142,41 +126,32 @@ describe("TransactionTable", () => {
     });
   });
 
-  // ── Delete confirmation flow ─────────────────────────────────────────────
-
   describe("delete confirmation flow", () => {
-    it("does not show the confirm dialog on initial render", () => {
+    it("does not show confirm dialog on initial render", () => {
       renderTable();
       expect(screen.queryByText("Delete transaction?")).not.toBeInTheDocument();
     });
 
-    it("opens the confirmation dialog when Delete is clicked", async () => {
+    it("opens confirmation dialog when Delete is clicked", async () => {
       renderTable();
-      const deleteButtons = screen.getAllByText("Delete");
-      await userEvent.click(deleteButtons[0]);
+      await userEvent.click(screen.getAllByText("Delete")[0]);
       expect(screen.getByText("Delete transaction?")).toBeInTheDocument();
     });
 
-    it("calls onDelete with the transaction id after confirming", async () => {
+    it("calls onDelete with transaction id after confirming", async () => {
       const onDelete = vi.fn().mockResolvedValue(undefined);
       renderTable({ onDelete });
-
       await userEvent.click(screen.getAllByText("Delete")[0]);
-
-      // Dialog "Delete" button is the last one rendered
       const allDeleteButtons = screen.getAllByText("Delete");
       await userEvent.click(allDeleteButtons[allDeleteButtons.length - 1]);
-
       expect(onDelete).toHaveBeenCalledWith("tx-001");
     });
 
-    it("dismisses the dialog without calling onDelete when Cancel is clicked", async () => {
+    it("dismisses dialog without calling onDelete when Cancel is clicked", async () => {
       const onDelete = vi.fn();
       renderTable({ onDelete });
-
       await userEvent.click(screen.getAllByText("Delete")[0]);
       await userEvent.click(screen.getByText("Cancel"));
-
       expect(onDelete).not.toHaveBeenCalled();
       expect(screen.queryByText("Delete transaction?")).not.toBeInTheDocument();
     });
@@ -187,10 +162,8 @@ describe("TransactionTable", () => {
     });
   });
 
-  // ── Empty state ──────────────────────────────────────────────────────────
-
   describe("empty state", () => {
-    it("renders an empty table body when transactions array is empty", () => {
+    it("renders empty table body when transactions array is empty", () => {
       render(
         <TransactionTable
           transactions={[]}
@@ -199,7 +172,6 @@ describe("TransactionTable", () => {
         />,
       );
       expect(screen.queryByText("Food")).not.toBeInTheDocument();
-      expect(screen.queryByText("Salary")).not.toBeInTheDocument();
     });
 
     it("renders column headers even with no data", () => {

@@ -5,21 +5,23 @@ const formatDate = (date) => {
   const d = new Date(date);
   const today = new Date();
   const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+
+  const dUTC = `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  const todayUTC = `${today.getUTCFullYear()}-${today.getUTCMonth()}-${today.getUTCDate()}`;
+  const yesterdayUTC = `${yesterday.getUTCFullYear()}-${yesterday.getUTCMonth()}-${yesterday.getUTCDate()}`;
+
+  if (dUTC === todayUTC) return "Today";
+  if (dUTC === yesterdayUTC) return "Yesterday";
+
   return d.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: "UTC", // FIX: display in UTC, consistent with how we store/query
   });
 };
 
-/**
- * TransactionTable — compact row density, horizontal scroll on small screens.
- *
- * Accepts normalized transactions where `categoryName` is set by TransactionProvider.
- */
 const TransactionTable = ({ transactions, onDelete, onEdit }) => {
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -38,7 +40,6 @@ const TransactionTable = ({ transactions, onDelete, onEdit }) => {
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[540px] border-collapse">
-            {/* ── Head ── */}
             <thead>
               <tr className="border-b border-border bg-inputBg">
                 {[
@@ -47,10 +48,10 @@ const TransactionTable = ({ transactions, onDelete, onEdit }) => {
                   "Amount",
                   "Note",
                   "Date",
-                  (onDelete || onEdit) && "",
+                  onDelete || onEdit ? "" : null,
                 ].map(
                   (h, i) =>
-                    h !== undefined && (
+                    h !== null && (
                       <th
                         key={i}
                         className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-secondaryText/70"
@@ -62,7 +63,6 @@ const TransactionTable = ({ transactions, onDelete, onEdit }) => {
               </tr>
             </thead>
 
-            {/* ── Body ── */}
             <tbody>
               {transactions.map((tx, idx) => {
                 const isIncome = tx.type === "income";
