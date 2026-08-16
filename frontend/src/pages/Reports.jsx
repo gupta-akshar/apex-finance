@@ -41,7 +41,6 @@ const shortFmt = (v) =>
       ? `₹${(v / 1_000).toFixed(0)}k`
       : `₹${v}`;
 
-/** Clamp for display only (progress bars, visual %). */
 const clampPct = (num, den) =>
   den === 0 ? 0 : Math.max(0, Math.min(100, Math.round((num / den) * 100)));
 
@@ -215,13 +214,14 @@ const Reports = () => {
   useFonts();
 
   const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(String(currentYear));
-  const [monthIdx, setMonthIdx] = useState("");
 
   const yearOptions = useMemo(
-    () => Array.from({ length: 5 }, (_, i) => String(currentYear - 2 + i)),
+    () => Array.from({ length: 10 }, (_, i) => String(currentYear - i)),
     [currentYear],
   );
+
+  const [year, setYear] = useState(String(currentYear));
+  const [monthIdx, setMonthIdx] = useState("");
 
   const {
     monthlyBuckets,
@@ -241,7 +241,7 @@ const Reports = () => {
 
   const rawSavingsRate =
     stats.income > 0 ? (stats.balance / stats.income) * 100 : 0;
-  const displaySavingsPct = clampPct(stats.balance, stats.income); // for visual % only
+  const displaySavingsPct = clampPct(stats.balance, stats.income);
 
   const savingsBadge =
     rawSavingsRate >= 20
@@ -299,7 +299,7 @@ const Reports = () => {
         />
       </div>
 
-      {/* ── Toolbar ── */}
+      {/* Toolbar */}
       <div className="sticky top-0 z-10 border-b border-[#27272a] bg-[#0a0a0c]/95 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-6 md:px-8 py-3 flex flex-wrap items-center gap-3">
           <span className="text-xs font-semibold text-[#52525b] uppercase tracking-[0.14em] mr-1 hidden sm:inline">
@@ -355,7 +355,7 @@ const Reports = () => {
 
         {error && <ErrorBanner message={error} onRetry={refresh} />}
 
-        {/* ── Summary cards ── */}
+        {/* Summary cards */}
         <div>
           <SectionLabel>Summary</SectionLabel>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -401,7 +401,7 @@ const Reports = () => {
           </div>
         </div>
 
-        {/* ── Charts ── */}
+        {/* Charts */}
         <div>
           <SectionLabel>Trends</SectionLabel>
           <div className="space-y-5">
@@ -586,7 +586,6 @@ const Reports = () => {
                 )}
               </ChartPanel>
 
-              {/* FIX L6: use INCOME_PIE_COLORS instead of the inline hardcoded array */}
               <ChartPanel
                 title="Income by Source"
                 subtitle="Where your money came from"
@@ -635,7 +634,7 @@ const Reports = () => {
           </div>
         </div>
 
-        {/* ── Expense breakdown table ── */}
+        {/* Expense breakdown table */}
         {hasExpenses && (
           <div>
             <SectionLabel>Expense Breakdown</SectionLabel>
@@ -727,7 +726,7 @@ const Reports = () => {
           </div>
         )}
 
-        {/* ── Peak month insight ── */}
+        {/* Peak month insight */}
         {hasMonthly && isFullYear && (
           <div>
             <SectionLabel>Insight</SectionLabel>
