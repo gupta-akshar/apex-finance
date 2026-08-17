@@ -119,22 +119,25 @@ export const getBudgetStatus = async (req, res, next) => {
 
     const categoryIds = budgetDocs.map((b) => b.category);
 
-    const expenses = await Transaction.aggregate([
-      {
-        $match: {
-          user: req.user._id,
-          type: "expense",
-          category: { $in: categoryIds },
-          date: { $gte: startDate, $lte: endDate },
+    const expenses = await Transaction.aggregate(
+      [
+        {
+          $match: {
+            user: req.user._id,
+            type: "expense",
+            category: { $in: categoryIds },
+            date: { $gte: startDate, $lte: endDate },
+          },
         },
-      },
-      {
-        $group: {
-          _id: "$category",
-          spent: { $sum: "$amount" },
+        {
+          $group: {
+            _id: "$category",
+            spent: { $sum: "$amount" },
+          },
         },
-      },
-    ]).maxTimeMS(10000);
+      ],
+      { maxTimeMS: 10000 },
+    );
 
     const spentMap = {};
     expenses.forEach((e) => {
@@ -198,37 +201,40 @@ export const getBudgets = async (req, res, next) => {
     if (month) filter.month = Number(month);
     if (year) filter.year = Number(year);
 
-    const budgets = await Budget.aggregate([
-      { $match: filter },
-      {
-        $lookup: {
-          from: "categories",
-          localField: "category",
-          foreignField: "_id",
-          as: "categoryDoc",
-        },
-      },
-      {
-        $unwind: {
-          path: "$categoryDoc",
-          preserveNullAndEmptyArrays: true,
-        },
-      },
-      {
-        $project: {
-          limit: 1,
-          month: 1,
-          year: 1,
-          createdAt: 1,
-          category: {
-            _id: "$categoryDoc._id",
-            name: "$categoryDoc.name",
-            type: "$categoryDoc.type",
+    const budgets = await Budget.aggregate(
+      [
+        { $match: filter },
+        {
+          $lookup: {
+            from: "categories",
+            localField: "category",
+            foreignField: "_id",
+            as: "categoryDoc",
           },
         },
-      },
-      { $sort: { year: -1, month: -1 } },
-    ]).maxTimeMS(10000);
+        {
+          $unwind: {
+            path: "$categoryDoc",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            limit: 1,
+            month: 1,
+            year: 1,
+            createdAt: 1,
+            category: {
+              _id: "$categoryDoc._id",
+              name: "$categoryDoc.name",
+              type: "$categoryDoc.type",
+            },
+          },
+        },
+        { $sort: { year: -1, month: -1 } },
+      ],
+      { maxTimeMS: 10000 },
+    );
 
     res.status(200).json(budgets);
   } catch (error) {

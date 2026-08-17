@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import API, { setAccessToken, clearAccessToken } from "../api/axios";
@@ -9,6 +9,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  // ── Listen for forced logout events from the Axios interceptor ────────────
   useEffect(() => {
     const handleForcedLogout = () => {
       setUser(null);
@@ -18,7 +19,13 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener("auth:logout", handleForcedLogout);
   }, [navigate]);
 
+  // ── Restore session on page load via refresh token cookie ─────────────────
+  const initRanRef = useRef(false);
+
   useEffect(() => {
+    if (initRanRef.current) return;
+    initRanRef.current = true;
+
     const init = async () => {
       try {
         const refreshBase =
@@ -44,34 +51,30 @@ export const AuthProvider = ({ children }) => {
     init();
   }, []);
 
-  // ─── Login ─────────────────────────────────────────────────────────────────
-  const login = async (email, password) => {
+  // ── Login ──────────────────────────────────────────────────────────────────
+  const login = useCallback(async (email, password) => {
     const res = await API.post("/auth/login", { email, password });
     const { accessToken, user: userData } = res.data;
-
     setAccessToken(accessToken);
     setUser(userData);
-
     return res.data;
-  };
+  }, []);
 
-  // ─── Register ──────────────────────────────────────────────────────────────
-  const register = async (name, email, password) => {
+  // ── Register ───────────────────────────────────────────────────────────────
+  const register = useCallback(async (name, email, password) => {
     const res = await API.post("/auth/register", { name, email, password });
     const { accessToken, user: userData } = res.data;
-
     setAccessToken(accessToken);
     setUser(userData);
-
     return res.data;
-  };
+  }, []);
 
-  // ─── Logout ────────────────────────────────────────────────────────────────
+  // ── Logout ─────────────────────────────────────────────────────────────────
   const logout = useCallback(async () => {
     try {
       await API.post("/auth/logout");
-    } catch (err) {
-      console.error("Logout API error:", err);
+    } catch {
+      // API call failing does not prevent client-side logout
     } finally {
       clearAccessToken();
       setUser(null);

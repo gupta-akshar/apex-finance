@@ -165,40 +165,43 @@ export const getTransactions = async (req, res, next) => {
       const safeSearch = search.slice(0, 100);
       const regex = new RegExp(escapeRegex(safeSearch), "i");
 
-      const [result] = await Transaction.aggregate([
-        { $match: filter },
-        {
-          $lookup: {
-            from: "categories",
-            localField: "category",
-            foreignField: "_id",
-            as: "category",
+      const [result] = await Transaction.aggregate(
+        [
+          { $match: filter },
+          {
+            $lookup: {
+              from: "categories",
+              localField: "category",
+              foreignField: "_id",
+              as: "category",
+            },
           },
-        },
-        { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } },
-        { $match: { $or: [{ "category.name": regex }, { note: regex }] } },
-        {
-          $facet: {
-            metadata: [{ $count: "total" }],
-            data: [
-              { $sort: sort },
-              { $skip: skip },
-              { $limit: limit },
-              {
-                $project: {
-                  type: 1,
-                  amount: 1,
-                  note: 1,
-                  date: 1,
-                  paymentMethod: 1,
-                  createdAt: 1,
-                  category: { _id: 1, name: 1, type: 1 },
+          { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } },
+          { $match: { $or: [{ "category.name": regex }, { note: regex }] } },
+          {
+            $facet: {
+              metadata: [{ $count: "total" }],
+              data: [
+                { $sort: sort },
+                { $skip: skip },
+                { $limit: limit },
+                {
+                  $project: {
+                    type: 1,
+                    amount: 1,
+                    note: 1,
+                    date: 1,
+                    paymentMethod: 1,
+                    createdAt: 1,
+                    category: { _id: 1, name: 1, type: 1 },
+                  },
                 },
-              },
-            ],
+              ],
+            },
           },
-        },
-      ]).maxTimeMS(10000);
+        ],
+        { maxTimeMS: 10000 },
+      );
 
       const total = result?.metadata?.[0]?.total ?? 0;
       const transactions = result?.data ?? [];
@@ -214,45 +217,48 @@ export const getTransactions = async (req, res, next) => {
       });
     }
 
-    const [result] = await Transaction.aggregate([
-      { $match: filter },
-      {
-        $facet: {
-          metadata: [{ $count: "total" }],
-          data: [
-            { $sort: sort },
-            { $skip: skip },
-            { $limit: limit },
-            {
-              $lookup: {
-                from: "categories",
-                localField: "category",
-                foreignField: "_id",
-                as: "category",
+    const [result] = await Transaction.aggregate(
+      [
+        { $match: filter },
+        {
+          $facet: {
+            metadata: [{ $count: "total" }],
+            data: [
+              { $sort: sort },
+              { $skip: skip },
+              { $limit: limit },
+              {
+                $lookup: {
+                  from: "categories",
+                  localField: "category",
+                  foreignField: "_id",
+                  as: "category",
+                },
               },
-            },
-            {
-              $unwind: {
-                path: "$category",
-                preserveNullAndEmptyArrays: true,
+              {
+                $unwind: {
+                  path: "$category",
+                  preserveNullAndEmptyArrays: true,
+                },
               },
-            },
-            {
-              $project: {
-                type: 1,
-                amount: 1,
-                note: 1,
-                date: 1,
-                paymentMethod: 1,
-                createdAt: 1,
-                sourceRecurringId: 1,
-                category: { _id: 1, name: 1, type: 1 },
+              {
+                $project: {
+                  type: 1,
+                  amount: 1,
+                  note: 1,
+                  date: 1,
+                  paymentMethod: 1,
+                  createdAt: 1,
+                  sourceRecurringId: 1,
+                  category: { _id: 1, name: 1, type: 1 },
+                },
               },
-            },
-          ],
+            ],
+          },
         },
-      },
-    ]).maxTimeMS(10000);
+      ],
+      { maxTimeMS: 10000 },
+    );
 
     const total = result?.metadata?.[0]?.total ?? 0;
     const transactions = result?.data ?? [];

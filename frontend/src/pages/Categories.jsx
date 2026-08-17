@@ -6,11 +6,8 @@ import {
 } from "../api/categoryApi";
 import DeleteConfirm from "../components/DeleteConfirm";
 import useFonts from "../hooks/useFonts";
+import useCategories from "../hooks/useCategories";
 import { TYPE_COLORS } from "../constants/colors";
-
-/* ─── Font injection (shared with Dashboard/Transactions) ─────────────────── */
-const FONT_HREF =
-  "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@300;400;500;600&display=swap";
 
 /* ─── Constants ───────────────────────────────────────────────────────────── */
 const TYPE_OPTIONS = [
@@ -279,75 +276,60 @@ const CategoryRow = ({ cat, onDelete, idx }) => {
 /* ═══════════════════════════════════════════════════════════════════════════ */
 const Categories = () => {
   useFonts();
+  const { categories: contextCategories, invalidate } = useCategories();
 
-  const [categories, setCategories] = useState([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null); // { _id, name }
-  const [filterType, setFilterType] = useState(""); // "" | "income" | "expense"
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [filterType, setFilterType] = useState("");
   const [search, setSearch] = useState("");
-  // ── API error state ───────────────────────────────────────────────────────
   const [apiError, setApiError] = useState("");
 
-  /* ── Load ── */
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await getCategories();
-        setCategories(data);
-      } catch (err) {
-        console.error("Failed to load categories:", err);
-        setApiError(
-          err?.response?.data?.message ||
-            err?.message ||
-            "Failed to load categories.",
-        );
-      } finally {
-        setPageLoading(false);
-      }
-    };
-    load();
-  }, []);
+  // Local state mirrors context so we can do optimistic updates
+  const [localCategories, setLocalCategories] = useState([]);
 
-  /* ── Filtered list ── */
+  useEffect(() => {
+    setLocalCategories(contextCategories);
+    if (contextCategories.length >= 0) setPageLoading(false);
+  }, [contextCategories]);
+
   const filtered = useMemo(() => {
-    let list = categories;
+    let list = localCategories;
     if (filterType) list = list.filter((c) => c.type === filterType);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((c) => c.name.toLowerCase().includes(q));
     }
     return list;
-  }, [categories, filterType, search]);
+  }, [localCategories, filterType, search]);
 
-  /* ── Grouped by type ── */
-  const grouped = useMemo(() => {
-    const income = filtered.filter((c) => c.type === "income");
-    const expense = filtered.filter((c) => c.type === "expense");
-    return { income, expense };
-  }, [filtered]);
-
-  /* ── Counts ── */
-  const counts = useMemo(
+  const grouped = useMemo(
     () => ({
-      total: categories.length,
-      income: categories.filter((c) => c.type === "income").length,
-      expense: categories.filter((c) => c.type === "expense").length,
+      income: filtered.filter((c) => c.type === "income"),
+      expense: filtered.filter((c) => c.type === "expense"),
     }),
-    [categories],
+    [filtered],
   );
 
-  /* ── Save ── */
+  const counts = useMemo(
+    () => ({
+      total: localCategories.length,
+      income: localCategories.filter((c) => c.type === "income").length,
+      expense: localCategories.filter((c) => c.type === "expense").length,
+    }),
+    [localCategories],
+  );
+
   const handleSave = async ({ name, type }) => {
     setSaving(true);
     setApiError("");
     try {
       const added = await addCategoryAPI({ name, type });
-      setCategories((prev) => [...prev, added]);
+      setLocalCategories((prev) => [...prev, added]);
+      invalidate();
       setShowForm(false);
     } catch (err) {
-      console.error("Failed to add category:", err);
       setApiError(
         err?.response?.data?.message ||
           err?.message ||

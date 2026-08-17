@@ -1,6 +1,6 @@
 import express from "express";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
@@ -26,9 +26,8 @@ const apiLimiter = rateLimit({
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
-
   keyGenerator: (req) => {
-    return req.user?._id?.toString() || req.ip;
+    return req.user?._id?.toString() || ipKeyGenerator(req);
   },
   message: {
     success: false,
@@ -37,9 +36,9 @@ const apiLimiter = rateLimit({
 });
 
 const analyticsLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 30,
-  keyGenerator: (req) => req.user?._id?.toString() || req.ip,
+  keyGenerator: (req) => req.user?._id?.toString() || ipKeyGenerator(req),
   message: {
     success: false,
     message: "Too many analytics requests. Please slow down.",

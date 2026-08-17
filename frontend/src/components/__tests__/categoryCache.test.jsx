@@ -3,11 +3,8 @@ import { act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 
-// FIX: all three imports below were "../src/..." — wrong root.
-// The test lives at src/components/__tests__/, so src-level modules are two levels up.
 import CategoryProvider from "../../context/CategoryProvider";
-import CategoryContext from "../../context/CategoryContext";
-import useCategories, { clearCategoryCache } from "../../hooks/useCategories";
+import useCategories from "../../hooks/useCategories";
 
 // ─── Mock API ─────────────────────────────────────────────────────────────────
 
@@ -31,9 +28,7 @@ const renderWithProvider = () =>
     wrapper: ({ children }) => <CategoryProvider>{children}</CategoryProvider>,
   });
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Category Cache
-// ══════════════════════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────────────────────
 
 describe("category caching behaviour", () => {
   beforeEach(() => {
@@ -44,7 +39,7 @@ describe("category caching behaviour", () => {
 
   describe("initial data fetch", () => {
     it("exposes an empty categories array while loading", async () => {
-      getCategories.mockReturnValue(new Promise(() => {}));
+      getCategories.mockReturnValue(new Promise(() => {})); // never resolves
 
       const { result } = renderWithProvider();
 
@@ -89,25 +84,18 @@ describe("category caching behaviour", () => {
     });
   });
 
-  // ── invalidate (re-fetch) ─────────────────────────────────────────────────
+  // ── invalidate (re-fetch) — now via context, not module singleton ─────────
 
   describe("invalidate triggers a fresh fetch", () => {
-    it("calls getCategories again when invalidate is invoked", async () => {
+    it("calls getCategories again when invalidate() is invoked via context", async () => {
       getCategories.mockResolvedValue(MOCK_CATEGORIES);
 
-      const contextResult = renderHook(
-        () => React.useContext(CategoryContext),
-        {
-          wrapper: ({ children }) => (
-            <CategoryProvider>{children}</CategoryProvider>
-          ),
-        },
-      );
+      const { result } = renderWithProvider();
 
-      await waitFor(() =>
-        expect(contextResult.result.current.loading).toBe(false),
-      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.categories).toHaveLength(2);
 
+      // FIX: invalidate is now exposed directly through context value
       const updatedCategories = [
         ...MOCK_CATEGORIES,
         { _id: "cat-3", name: "Transport", type: "expense" },
@@ -115,25 +103,25 @@ describe("category caching behaviour", () => {
       getCategories.mockResolvedValue(updatedCategories);
 
       act(() => {
-        contextResult.result.current.invalidate();
+        result.current.invalidate();
       });
 
-      await waitFor(() =>
-        expect(contextResult.result.current.categories).toHaveLength(3),
-      );
+      await waitFor(() => expect(result.current.categories).toHaveLength(3));
 
       expect(getCategories.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
   });
 
-  // ── clearCategoryCache ────────────────────────────────────────────────────
+  // ── clearCategoryCache — now a no-op, kept for back-compat ───────────────
 
-  describe("clearCategoryCache", () => {
-    it("is a no-op function that does not throw", () => {
+  describe("clearCategoryCache (back-compat no-op)", () => {
+    it("does not throw when called", async () => {
+      const { clearCategoryCache } = await import("../../hooks/useCategories");
       expect(() => clearCategoryCache()).not.toThrow();
     });
 
-    it("can be called multiple times without error", () => {
+    it("can be called multiple times without error", async () => {
+      const { clearCategoryCache } = await import("../../hooks/useCategories");
       expect(() => {
         clearCategoryCache();
         clearCategoryCache();
@@ -142,64 +130,26 @@ describe("category caching behaviour", () => {
     });
   });
 
-  // ── useCategories default values ─────────────────────────────────────────
+  // ── useCategories outside provider — safe defaults ────────────────────────
 
-  describe("useCategories hook defaults", () => {
-    it("returns default context values when consumed outside a provider", () => {
+  describe("useCategories hook defaults (outside provider)", () => {
+    it("returns safe defaults instead of throwing when outside a provider", () => {
+      // FIX: hook now returns safe defaults instead of throwing Error
       const { result } = renderHook(() => useCategories());
 
       expect(result.current.categories).toEqual([]);
       expect(result.current.loading).toBe(false);
       expect(result.current.error).toBeNull();
+      expect(typeof result.current.invalidate).toBe("function");
+    });
+
+    it("invalidate is a safe no-op outside a provider", () => {
+      const { result } = renderHook(() => useCategories());
+      expect(() => result.current.invalidate()).not.toThrow();
     });
   });
 
-  // ── Logout invalidates category state ────────────────────────────────────
-
-  describe("logout category invalidation", () => {
-    it("resets categories to empty after clearCategoryCache + unmount", async () => {
-      getCategories.mockResolvedValue(MOCK_CATEGORIES);
-
-      const { result, unmount } = renderWithProvider();
-
-      await waitFor(() => expect(result.current.loading).toBe(false));
-      expect(result.current.categories).toHaveLength(2);
-
-      act(() => {
-        clearCategoryCache();
-      });
-      unmount();
-
-      getCategories.mockReturnValue(new Promise(() => {}));
-      const { result: freshResult } = renderWithProvider();
-
-      expect(freshResult.current.categories).toEqual([]);
-    });
-
-    it("re-fetches categories on remount after logout", async () => {
-      getCategories.mockResolvedValue(MOCK_CATEGORIES);
-
-      const { unmount } = renderWithProvider();
-      await waitFor(() => expect(getCategories).toHaveBeenCalledTimes(1));
-
-      unmount();
-      clearCategoryCache();
-
-      const freshCategories = [
-        { _id: "cat-new", name: "Bills", type: "expense" },
-      ];
-      getCategories.mockResolvedValue(freshCategories);
-
-      const { result } = renderWithProvider();
-
-      await waitFor(() => expect(result.current.loading).toBe(false));
-
-      expect(result.current.categories[0].name).toBe("Bills");
-      expect(getCategories).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  // ── Abort on unmount ──────────────────────────────────────────────────────
+  // ── Cleanup on unmount ────────────────────────────────────────────────────
 
   describe("cleanup on unmount", () => {
     it("does not update state after the provider is unmounted", async () => {
@@ -219,7 +169,28 @@ describe("category caching behaviour", () => {
         await Promise.resolve();
       });
 
+      // After unmount, state should remain at initial empty value
       expect(result.current.categories).toEqual([]);
+    });
+  });
+
+  // ── React Strict Mode / multiple provider instances ───────────────────────
+
+  describe("React Strict Mode double-mount safety", () => {
+    it("correctly fetches categories even after double-mount (no module singleton corruption)", async () => {
+      getCategories.mockResolvedValue(MOCK_CATEGORIES);
+
+      // Simulate Strict Mode double-mount by mounting, unmounting, remounting
+      const { result: r1, unmount: u1 } = renderWithProvider();
+      await waitFor(() => expect(r1.current.loading).toBe(false));
+      u1();
+
+      // Second mount should work correctly — not broken by module-level singleton
+      getCategories.mockResolvedValue(MOCK_CATEGORIES);
+      const { result: r2 } = renderWithProvider();
+      await waitFor(() => expect(r2.current.loading).toBe(false));
+
+      expect(r2.current.categories).toHaveLength(2);
     });
   });
 });
