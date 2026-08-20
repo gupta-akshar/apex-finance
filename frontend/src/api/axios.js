@@ -1,17 +1,5 @@
 import axios from "axios";
 
-/**
- * FIXES APPLIED:
- *  H4 — Removed dual token storage. Previously the token was written to BOTH
- *       the in-memory `_accessToken` store AND `API.defaults.headers.common`.
- *       If these ever diverged (e.g. clearAccessToken() called without also
- *       deleting the default header), requests would carry a stale or ghost token.
- *       Fix: the request interceptor is the SINGLE place that reads and injects
- *       the token. API.defaults.headers.common is never touched for auth.
- *       All call sites that previously set API.defaults.headers.common have been
- *       updated in AuthProvider to only use setAccessToken().
- */
-
 // ─── In-memory token store ────────────────────────────────────────────────────
 
 let _accessToken = null;
@@ -43,9 +31,21 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+// ─── Auth routes that must NEVER trigger the refresh interceptor ──────────────
+
+const AUTH_BYPASS_PATTERNS = [
+  /\/auth\/login/,
+  /\/auth\/register/,
+  /\/auth\/refresh/,
+  /\/auth\/logout/,
+  /\/auth\/forgot-password/,
+  /\/auth\/reset-password/,
+];
+
+const isAuthBypassRoute = (url = "") =>
+  AUTH_BYPASS_PATTERNS.some((pattern) => pattern.test(url));
+
 // ─── Request interceptor ─────────────────────────────────────────────────────
-// Single authoritative place that injects the bearer token.
-// FIX H4: we no longer also set API.defaults.headers.common — one source of truth.
 
 API.interceptors.request.use((config) => {
   const token = getAccessToken();
@@ -65,14 +65,12 @@ API.interceptors.response.use(
 
     const originalRequest = error.config;
 
-    // Never retry the refresh endpoint itself — avoid infinite loops.
-    if (originalRequest.url.includes("/auth/refresh")) {
+    if (isAuthBypassRoute(originalRequest.url)) {
       return Promise.reject(error);
     }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
-        // Queue this request until the in-flight refresh resolves.
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
@@ -100,11 +98,7 @@ API.interceptors.response.use(
         }
 
         const newToken = res.data.accessToken;
-
-        // FIX H4: only write to the in-memory store.
-        // The request interceptor above will pick it up for all subsequent calls.
         setAccessToken(newToken);
-
         processQueue(null, newToken);
 
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
@@ -112,10 +106,7 @@ API.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
         clearAccessToken();
-
-        // Notify the app that the session has ended.
         window.dispatchEvent(new Event("auth:logout"));
-
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

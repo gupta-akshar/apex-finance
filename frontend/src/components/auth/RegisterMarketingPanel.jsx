@@ -256,7 +256,7 @@ const RegisterMarketingPanel = () => {
           How it works
         </p>
         <div className="flex flex-col gap-3">
-          {STEPS.map((s, i) => (
+          {STEPS.map((s) => (
             <div key={s.num} className="flex items-start gap-3">
               <div
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0 border"

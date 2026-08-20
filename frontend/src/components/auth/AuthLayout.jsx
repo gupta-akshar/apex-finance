@@ -1,9 +1,21 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 
-// ─── Animated background mesh for left panel ─────────────────────────────────
+// ─── Stable particle data (computed once outside the component) ───────────────
+
+const PARTICLE_DATA = Array.from({ length: 20 }, (_, i) => ({
+  id: i,
+  size: 1 + (((i * 7 + 3) % 10) / 10) * 3, // deterministic 1–4 px
+  x: (i * 37 + 11) % 100, // spread 0–99 %
+  y: (i * 53 + 7) % 100,
+  delay: (i * 8) % 8,
+  duration: 6 + (i % 8),
+  opacity: 0.08 + (i % 5) * 0.04,
+  isGreen: i % 3 === 0,
+}));
+
+// ─── Animated background mesh ─────────────────────────────────────────────────
 const MeshBackground = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none">
-    {/* Base gradient */}
     <div
       className="absolute inset-0"
       style={{
@@ -11,7 +23,6 @@ const MeshBackground = () => (
           "linear-gradient(135deg, #0a1628 0%, #0d1f3c 40%, #0f2847 70%, #0a1e38 100%)",
       }}
     />
-    {/* Radial glow orbs */}
     <div
       className="absolute rounded-full animate-float-slow"
       style={{
@@ -49,7 +60,6 @@ const MeshBackground = () => (
         filter: "blur(30px)",
       }}
     />
-    {/* Grid overlay */}
     <div
       className="absolute inset-0 opacity-[0.04]"
       style={{
@@ -58,7 +68,6 @@ const MeshBackground = () => (
         backgroundSize: "48px 48px",
       }}
     />
-    {/* Noise texture */}
     <div
       className="absolute inset-0 opacity-[0.025]"
       style={{
@@ -69,55 +78,51 @@ const MeshBackground = () => (
   </div>
 );
 
-// ─── Floating particles ───────────────────────────────────────────────────────
-const Particles = () => {
-  const particles = Array.from({ length: 20 }, (_, i) => ({
-    id: i,
-    size: Math.random() * 3 + 1,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    delay: Math.random() * 8,
-    duration: 6 + Math.random() * 8,
-    opacity: 0.08 + Math.random() * 0.18,
-  }));
-
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {particles.map((p) => (
-        <div
-          key={p.id}
-          className="absolute rounded-full animate-drift"
-          style={{
-            width: p.size + "px",
-            height: p.size + "px",
-            left: p.x + "%",
-            top: p.y + "%",
-            background: p.id % 3 === 0 ? "#10b981" : "#6366f1",
-            opacity: p.opacity,
-            animationDelay: `-${p.delay}s`,
-            animationDuration: p.duration + "s",
-          }}
-        />
-      ))}
-    </div>
-  );
-};
+// ─── Particles (uses stable module-level data, no Math.random in render) ──────
+const Particles = () => (
+  <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    {PARTICLE_DATA.map((p) => (
+      <div
+        key={p.id}
+        className="absolute rounded-full animate-drift"
+        style={{
+          width: p.size + "px",
+          height: p.size + "px",
+          left: p.x + "%",
+          top: p.y + "%",
+          background: p.isGreen ? "#10b981" : "#6366f1",
+          opacity: p.opacity,
+          animationDelay: `-${p.delay}s`,
+          animationDuration: p.duration + "s",
+        }}
+      />
+    ))}
+  </div>
+);
 
 // ─── AuthLayout ───────────────────────────────────────────────────────────────
+
 const AuthLayout = ({ marketingPanel, children, animKey }) => {
   return (
     <div
-      className="min-h-screen flex bg-[#0a0a0c]"
+      // Desktop: exact viewport height, no page scroll.
+      // Mobile: natural min-height scroll (lg: prefix overrides).
+      className="min-h-screen lg:h-screen lg:overflow-hidden flex bg-[#0a0a0c]"
       style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}
     >
-      {/* ── Left: Marketing Panel (hidden on mobile) ── */}
+      {/* ── Left: Marketing Panel ── */}
+      {/* overflow-y-auto lets marketing content scroll without affecting form */}
       <div
         className="hidden lg:flex lg:flex-col relative overflow-hidden"
         style={{ flex: "0 0 58%" }}
       >
         <MeshBackground />
         <Particles />
-        <div className="relative z-10 flex flex-col h-full px-14 py-10">
+        {/*
+          py-8 (was py-10) + overflow-y-auto: marketing panel scrolls if it
+          overflows on smaller laptops; users don't interact with it during auth.
+        */}
+        <div className="relative z-10 flex flex-col h-full px-10 py-8 overflow-y-auto no-scrollbar">
           {marketingPanel}
         </div>
       </div>
@@ -141,7 +146,7 @@ const AuthLayout = ({ marketingPanel, children, animKey }) => {
         />
 
         {/* Mobile logo */}
-        <div className="lg:hidden flex items-center gap-2.5 px-8 pt-8 pb-2">
+        <div className="lg:hidden flex items-center gap-2.5 px-8 pt-6 pb-2 shrink-0">
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center text-base"
             style={{
@@ -159,15 +164,14 @@ const AuthLayout = ({ marketingPanel, children, animKey }) => {
           </span>
         </div>
 
-        {/* Form centered */}
-        <div className="flex-1 flex items-center justify-center px-6 sm:px-10 py-8">
+        <div className="flex-1 flex justify-center px-6 sm:px-10 pt-12 pb-6 overflow-y-auto no-scrollbar">
           <div key={animKey} className="w-full max-w-[400px] auth-form-enter">
             {children}
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-8 pb-6 text-center">
+        {/* Footer — shrink-0 keeps it pinned at bottom, never pushes form up */}
+        <div className="shrink-0 px-8 pb-4 text-center">
           <p
             className="text-[11px] text-[#3f3f46]"
             style={{ fontFamily: "'DM Sans', sans-serif" }}
@@ -177,7 +181,7 @@ const AuthLayout = ({ marketingPanel, children, animKey }) => {
         </div>
       </div>
 
-      {/* Global animation styles */}
+      {/* ── Global animation styles ── */}
       <style>{`
         @keyframes float-slow {
           0%, 100% { transform: translate(0, 0) scale(1); }
@@ -193,7 +197,7 @@ const AuthLayout = ({ marketingPanel, children, animKey }) => {
           50% { transform: translate(-50%, calc(-50% - 15px)) scale(1.12); }
         }
         @keyframes drift {
-          0%, 100% { transform: translateY(0px) translateX(0px); opacity: var(--base-opacity, 0.1); }
+          0%, 100% { transform: translateY(0px) translateX(0px); }
           25% { transform: translateY(-12px) translateX(5px); }
           75% { transform: translateY(8px) translateX(-5px); }
         }
@@ -306,6 +310,16 @@ const AuthLayout = ({ marketingPanel, children, animKey }) => {
         .password-strength-bar {
           transform-origin: left;
           animation: bar-grow 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        /* Error banner slide-in animation */
+        @keyframes error-slide-in {
+          from { opacity: 0; transform: translateY(-6px); max-height: 0; }
+          to   { opacity: 1; transform: translateY(0);    max-height: 80px; }
+        }
+        .auth-error-banner {
+          animation: error-slide-in 0.25s ease both;
+          overflow: hidden;
         }
       `}</style>
     </div>
