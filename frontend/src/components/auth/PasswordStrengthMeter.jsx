@@ -5,7 +5,7 @@ const RequirementItem = ({ met, text }) => (
   <div className="flex items-center gap-1.5">
     <span
       className="text-[11px] transition-colors duration-200"
-      style={{ color: met ? "#10b981" : "#52525b" }}
+      style={{ color: met ? "#818cf8" : "#52525b" }}
     >
       {met ? "✓" : "○"}
     </span>
@@ -29,7 +29,6 @@ const PasswordStrengthMeter = ({ password, show = true }) => {
 
   return (
     <div className="mt-2">
-      {/* Segmented bar */}
       <div className="flex gap-1 mb-1.5">
         {Array.from({ length: segments }).map((_, i) => (
           <div
@@ -42,7 +41,6 @@ const PasswordStrengthMeter = ({ password, show = true }) => {
         ))}
       </div>
 
-      {/* Label */}
       {label && (
         <p
           className="text-[11px] font-semibold mb-2 transition-colors duration-200"
@@ -52,7 +50,6 @@ const PasswordStrengthMeter = ({ password, show = true }) => {
         </p>
       )}
 
-      {/* Requirements checklist */}
       {checks && (
         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
           <RequirementItem met={checks.length} text="8+ characters" />

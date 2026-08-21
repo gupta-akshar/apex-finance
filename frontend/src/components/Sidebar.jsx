@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
 import { ROUTES } from "../constants/routes";
+import logo from "../../public/logo.svg";
 
 const NAV_ITEMS = [
   { to: ROUTES.DASHBOARD, label: "Dashboard", icon: "▦" },
@@ -49,9 +50,27 @@ const Sidebar = () => {
   const sidebarContent = (
     <aside className="h-full w-64 bg-card border-r border-border flex flex-col overflow-y-auto">
       <div className="px-5 py-5 border-b border-border shrink-0">
-        <span className="text-base font-bold tracking-tight text-primaryText">
-          💸 ExpenseTracker
-        </span>
+        <Link
+          to={ROUTES.HOME}
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 group"
+        >
+          <img
+            src={logo}
+            alt="ExpenseTracker"
+            className="w-10 h-10 transition-transform duration-300 group-hover:scale-105"
+          />
+
+          <div>
+            <h2 className="text-[18px] font-bold tracking-tight text-primaryText leading-none">
+              ExpenseTracker
+            </h2>
+
+            <p className="text-[11px] text-secondaryText mt-1 leading-none">
+              Personal Finance Platform
+            </p>
+          </div>
+        </Link>
       </div>
       <nav className="flex-1 px-3 py-4 space-y-0.5">{navLinks}</nav>
       <div className="px-5 py-4 border-t border-border shrink-0">

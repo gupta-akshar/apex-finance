@@ -1,23 +1,24 @@
 import React from "react";
+import logo from "../../../public/logo.svg";
 
 const STEPS = [
   {
     num: "01",
     title: "Create your account",
     desc: "Free forever. No credit card. No hidden fees.",
-    color: "#10b981",
+    color: "#6366f1",
   },
   {
     num: "02",
     title: "Add your transactions",
     desc: "Income and expenses auto-organised by category.",
-    color: "#6366f1",
+    color: "#818cf8",
   },
   {
     num: "03",
     title: "Watch insights appear",
     desc: "Charts and reports update in real time as you track.",
-    color: "#f59e0b",
+    color: "#a78bfa",
   },
 ];
 
@@ -28,7 +29,6 @@ const BENEFITS = [
   { icon: "♾️", text: "Unlimited transactions" },
 ];
 
-// ── Mini mock dashboard preview ───────────────────────────────────────────────
 const MiniDashboard = () => {
   const bars = [38, 55, 42, 68, 51, 77, 44, 88, 62, 59, 73, 95];
   return (
@@ -92,7 +92,7 @@ const MiniDashboard = () => {
           ))}
         </div>
 
-        {/* Bar chart */}
+        {/* Bar chart — indigo bars */}
         <div
           className="rounded-lg border p-3 mb-3"
           style={{
@@ -115,8 +115,8 @@ const MiniDashboard = () => {
                     height: `${h}%`,
                     background:
                       i === 11
-                        ? "linear-gradient(180deg, #10b981, #059669)"
-                        : "rgba(16,185,129,0.2)",
+                        ? "linear-gradient(180deg, #818cf8, #6366f1)"
+                        : "rgba(99,102,241,0.25)",
                   }}
                 />
               </div>
@@ -136,7 +136,7 @@ const MiniDashboard = () => {
           </div>
         </div>
 
-        {/* Recent row */}
+        {/* Recent rows */}
         {[
           { label: "Salary", type: "income", amount: "+₹85,000" },
           { label: "Food", type: "expense", amount: "−₹1,240" },
@@ -182,34 +182,30 @@ const MiniDashboard = () => {
 const RegisterMarketingPanel = () => {
   return (
     <div className="flex flex-col h-full">
-      {/* ── Logo ── */}
-      <div className="left-stagger-1 flex items-center gap-3 mb-10">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
-          style={{
-            background: "linear-gradient(135deg, #10b981, #059669)",
-            boxShadow: "0 4px 20px rgba(16,185,129,0.4)",
-          }}
-        >
-          💸
-        </div>
+      {/* Logo */}
+      <div className="left-stagger-1 flex items-center gap-3 mb-12">
+        <img
+          src={logo}
+          alt="ExpenseTracker"
+          className="w-10 h-10 rounded-xl shrink-0"
+          style={{ boxShadow: "0 4px 20px rgba(99,102,241,0.4)" }}
+        />
         <div>
           <p
-            className="text-sm font-bold text-white"
+            className="text-sm font-bold text-white leading-tight"
             style={{ fontFamily: "'DM Sans', sans-serif" }}
           >
             ExpenseTracker
           </p>
           <p
-            className="text-[11px] text-[#52525b]"
+            className="text-[11px] text-[#52525b] leading-tight"
             style={{ fontFamily: "'DM Sans', sans-serif" }}
           >
             Personal Finance Platform
           </p>
         </div>
       </div>
-
-      {/* ── Headline ── */}
+      {/* Headline */}
       <div className="left-stagger-2 mb-8">
         <h1
           className="text-white leading-tight mb-3"
@@ -224,7 +220,7 @@ const RegisterMarketingPanel = () => {
           <span
             style={{
               background:
-                "linear-gradient(135deg, #10b981 0%, #34d399 50%, #a7f3d0 100%)",
+                "linear-gradient(135deg, #6366f1 0%, #818cf8 50%, #a78bfa 100%)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",
@@ -242,12 +238,12 @@ const RegisterMarketingPanel = () => {
         </p>
       </div>
 
-      {/* ── Dashboard preview ── */}
+      {/* Dashboard preview */}
       <div className="left-stagger-3 mb-8">
         <MiniDashboard />
       </div>
 
-      {/* ── How it works ── */}
+      {/* How it works */}
       <div className="left-stagger-4 mb-8">
         <p
           className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#52525b] mb-4"
@@ -288,7 +284,7 @@ const RegisterMarketingPanel = () => {
         </div>
       </div>
 
-      {/* ── Benefits chips ── */}
+      {/* Benefits chips */}
       <div className="left-stagger-5 mt-auto">
         <div className="flex flex-wrap gap-2">
           {BENEFITS.map((b) => (

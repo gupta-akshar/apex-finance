@@ -1,41 +1,42 @@
 import React from "react";
+import logo from "../../../public/logo.svg";
 
 const FEATURES = [
   {
     icon: "↕",
-    color: "#10b981",
-    glow: "rgba(16,185,129,0.15)",
+    color: "#6366f1",
+    glow: "rgba(99,102,241,0.15)",
     title: "Smart Expense Tracking",
     desc: "Log every rupee across income and expenses with categories, notes, and payment methods.",
   },
   {
     icon: "◉",
-    color: "#6366f1",
-    glow: "rgba(99,102,241,0.15)",
+    color: "#a78bfa",
+    glow: "rgba(167,139,250,0.15)",
     title: "Visual Analytics",
     desc: "Pie charts, bar graphs, and monthly trend lines that actually tell your financial story.",
   },
   {
     icon: "◈",
-    color: "#f59e0b",
-    glow: "rgba(245,158,11,0.15)",
+    color: "#818cf8",
+    glow: "rgba(129,140,248,0.15)",
     title: "Budget Guardrails",
     desc: "Set category budgets and receive warnings before you overspend — every single month.",
   },
   {
     icon: "↺",
-    color: "#e879f9",
-    glow: "rgba(232,121,249,0.15)",
+    color: "#c4b5fd",
+    glow: "rgba(196,181,253,0.15)",
     title: "Recurring Automation",
     desc: "Salaries, subscriptions, and EMIs auto-post on schedule. Set once, forget forever.",
   },
 ];
 
 const STATS = [
-  { value: "100%", label: "Free forever", color: "#10b981" },
-  { value: "∞", label: "Transactions", color: "#6366f1" },
-  { value: "4", label: "Chart types", color: "#f59e0b" },
-  { value: "0", label: "Ads ever", color: "#e879f9" },
+  { value: "100%", label: "Free forever", color: "#6366f1" },
+  { value: "∞", label: "Transactions", color: "#818cf8" },
+  { value: "4", label: "Chart types", color: "#a78bfa" },
+  { value: "0", label: "Ads ever", color: "#c4b5fd" },
 ];
 
 const TESTIMONIAL = {
@@ -48,18 +49,14 @@ const TESTIMONIAL = {
 const LoginMarketingPanel = () => {
   return (
     <div className="flex flex-col h-full">
-      {/* ── Logo + Brand ── */}
+      {/* Logo + Brand */}
       <div className="left-stagger-1 flex items-center gap-3 mb-12">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
-          style={{
-            background: "linear-gradient(135deg, #10b981, #059669)",
-            boxShadow:
-              "0 4px 20px rgba(16,185,129,0.4), inset 0 1px 0 rgba(255,255,255,0.2)",
-          }}
-        >
-          💸
-        </div>
+        <img
+          src={logo}
+          alt="ExpenseTracker"
+          className="w-10 h-10 rounded-xl shrink-0"
+          style={{ boxShadow: "0 4px 20px rgba(99,102,241,0.4)" }}
+        />
         <div>
           <p
             className="text-sm font-bold text-white leading-tight"
@@ -76,19 +73,19 @@ const LoginMarketingPanel = () => {
         </div>
       </div>
 
-      {/* ── Hero headline ── */}
+      {/* Hero headline */}
       <div className="left-stagger-2 mb-10">
         <div
           className="inline-flex items-center gap-2 px-3 py-1 rounded-full border mb-5 text-xs font-medium"
           style={{
-            background: "rgba(16,185,129,0.08)",
-            borderColor: "rgba(16,185,129,0.2)",
-            color: "#10b981",
+            background: "rgba(99,102,241,0.08)",
+            borderColor: "rgba(99,102,241,0.2)",
+            color: "#818cf8",
             fontFamily: "'DM Sans', sans-serif",
           }}
         >
           <span
-            className="w-1.5 h-1.5 rounded-full bg-emerald-400"
+            className="w-1.5 h-1.5 rounded-full bg-[#6366f1]"
             style={{ animation: "pulse-ring 2s infinite" }}
           />
           Built for Indian households
@@ -107,7 +104,7 @@ const LoginMarketingPanel = () => {
           <span
             style={{
               background:
-                "linear-gradient(135deg, #10b981 0%, #34d399 50%, #6ee7b7 100%)",
+                "linear-gradient(135deg, #6366f1 0%, #818cf8 50%, #a78bfa 100%)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",
@@ -130,7 +127,7 @@ const LoginMarketingPanel = () => {
         </p>
       </div>
 
-      {/* ── Feature list ── */}
+      {/* Feature list */}
       <div className="left-stagger-3 flex flex-col gap-2 mb-10">
         {FEATURES.map((f, i) => (
           <div
@@ -166,7 +163,7 @@ const LoginMarketingPanel = () => {
         ))}
       </div>
 
-      {/* ── Stats grid ── */}
+      {/* Stats grid */}
       <div className="left-stagger-4 grid grid-cols-4 gap-2 mb-8">
         {STATS.map((s) => (
           <div
@@ -196,7 +193,7 @@ const LoginMarketingPanel = () => {
         ))}
       </div>
 
-      {/* ── Testimonial ── */}
+      {/* Testimonial */}
       <div
         className="left-stagger-5 mt-auto rounded-xl border p-5"
         style={{
@@ -205,10 +202,9 @@ const LoginMarketingPanel = () => {
           borderColor: "rgba(255,255,255,0.07)",
         }}
       >
-        {/* Stars */}
         <div className="flex gap-1 mb-3">
           {Array.from({ length: TESTIMONIAL.rating }).map((_, i) => (
-            <span key={i} className="text-amber-400 text-sm">
+            <span key={i} className="text-[#facc15] text-sm">
               ★
             </span>
           ))}
@@ -224,7 +220,7 @@ const LoginMarketingPanel = () => {
         <div className="flex items-center gap-3">
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-            style={{ background: "linear-gradient(135deg, #10b981, #6366f1)" }}
+            style={{ background: "linear-gradient(135deg, #6366f1, #4f46e5)" }}
           >
             {TESTIMONIAL.author[0]}
           </div>

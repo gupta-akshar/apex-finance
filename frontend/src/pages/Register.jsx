@@ -12,7 +12,6 @@ import SocialLoginButton from "../components/auth/SocialLoginButton";
 import DividerWithText from "../components/auth/DividerWithText";
 import { mapAuthError } from "../utils/authErrors";
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
 const EyeOpen = () => (
   <svg
     width="16"
@@ -45,7 +44,6 @@ const EyeClosed = () => (
   </svg>
 );
 
-// ─── Success overlay ──────────────────────────────────────────────────────────
 const SuccessOverlay = ({ name }) => (
   <div
     role="status"
@@ -53,7 +51,7 @@ const SuccessOverlay = ({ name }) => (
     className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl z-20"
     style={{
       background:
-        "linear-gradient(160deg, rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.06) 100%)",
+        "linear-gradient(160deg, rgba(99,102,241,0.12) 0%, rgba(79,70,229,0.06) 100%)",
       backdropFilter: "blur(4px)",
       animation: "auth-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both",
     }}
@@ -61,8 +59,8 @@ const SuccessOverlay = ({ name }) => (
     <div
       className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
       style={{
-        background: "linear-gradient(135deg, #10b981, #059669)",
-        boxShadow: "0 8px 32px rgba(16,185,129,0.4)",
+        background: "linear-gradient(135deg, #6366f1, #4f46e5)",
+        boxShadow: "0 8px 32px rgba(99,102,241,0.4)",
         animation: "pulse-ring 1.5s ease-out",
       }}
     >
@@ -97,7 +95,6 @@ const SuccessOverlay = ({ name }) => (
   </div>
 );
 
-// ─── Register Page ────────────────────────────────────────────────────────────
 const Register = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -118,7 +115,6 @@ const Register = () => {
   const [success, setSuccess] = useState(false);
   const [apiError, setApiError] = useState("");
 
-  // ── Clear the API-level error when the user starts correcting their input ──
   const makeChangeHandler = (field) => (e) => {
     if (apiError) setApiError("");
     handleChange(field)(e);
@@ -137,9 +133,7 @@ const Register = () => {
       setSuccess(true);
       setTimeout(() => navigate(ROUTES.DASHBOARD), 1800);
     } catch (err) {
-      // ── FIX: centralized error mapper, no raw backend messages ────────────
       const mapped = mapAuthError(err, "register");
-
       if (
         mapped.toLowerCase().includes("email") ||
         mapped.toLowerCase().includes("account with this email")
@@ -155,7 +149,6 @@ const Register = () => {
 
   return (
     <AuthLayout animKey="register" marketingPanel={<RegisterMarketingPanel />}>
-      {/* ── Heading ── */}
       <div className="stagger-1 mb-5">
         <h2
           className="text-2xl font-bold text-white mb-1.5"
@@ -175,10 +168,8 @@ const Register = () => {
       </div>
 
       <AuthCard className="relative">
-        {/* Success overlay */}
         {success && <SuccessOverlay name={values.name} />}
 
-        {/* ── API Error banner — animated, screen-reader friendly ─────────── */}
         {apiError && !success && (
           <div
             role="alert"
@@ -202,7 +193,6 @@ const Register = () => {
         )}
 
         <form onSubmit={handleSubmit} noValidate>
-          {/* Full Name */}
           <div className="stagger-2">
             <AuthInput
               label="Full name"
@@ -217,7 +207,6 @@ const Register = () => {
             />
           </div>
 
-          {/* Email */}
           <div className="stagger-3 mt-3">
             <AuthInput
               label="Email address"
@@ -232,7 +221,6 @@ const Register = () => {
             />
           </div>
 
-          {/* Password */}
           <div className="stagger-4 mt-3">
             <AuthInput
               label="Password"
@@ -248,7 +236,7 @@ const Register = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  className="text-[#52525b] hover:text-[#a1a1aa] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded"
+                  className="text-[#52525b] hover:text-[#a1a1aa] transition-colors focus:outline-none"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                   tabIndex={-1}
                 >
@@ -262,7 +250,6 @@ const Register = () => {
             />
           </div>
 
-          {/* Confirm Password */}
           <div className="stagger-5 mt-3">
             <AuthInput
               label="Confirm password"
@@ -278,7 +265,7 @@ const Register = () => {
                 <button
                   type="button"
                   onClick={() => setShowConfirm((p) => !p)}
-                  className="text-[#52525b] hover:text-[#a1a1aa] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded"
+                  className="text-[#52525b] hover:text-[#a1a1aa] transition-colors focus:outline-none"
                   aria-label={showConfirm ? "Hide password" : "Show password"}
                   tabIndex={-1}
                 >
@@ -292,7 +279,7 @@ const Register = () => {
                 <p
                   className="text-[11px] mt-1 flex items-center gap-1.5"
                   style={{
-                    color: "#10b981",
+                    color: "#818cf8",
                     fontFamily: "'DM Sans', sans-serif",
                   }}
                 >
@@ -301,7 +288,6 @@ const Register = () => {
               )}
           </div>
 
-          {/* Terms note */}
           <p
             className="stagger-5 text-[11px] text-[#3f3f46] mt-3 mb-4 leading-relaxed"
             style={{ fontFamily: "'DM Sans', sans-serif" }}
@@ -329,22 +315,21 @@ const Register = () => {
             .
           </p>
 
-          {/* Submit */}
           <div className="stagger-6">
             <button
               type="submit"
               disabled={submitting || success}
               aria-busy={submitting}
-              className="btn-primary w-full py-3 rounded-xl text-sm font-semibold text-white transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+              className="btn-primary w-full py-3 rounded-xl text-sm font-semibold text-white transition-all duration-200 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
               style={{
                 background:
                   submitting || success
-                    ? "rgba(16,185,129,0.5)"
-                    : "linear-gradient(135deg, #10b981, #059669)",
+                    ? "rgba(99,102,241,0.5)"
+                    : "linear-gradient(135deg, #6366f1, #4f46e5)",
                 boxShadow:
                   submitting || success
                     ? "none"
-                    : "0 4px 20px rgba(16,185,129,0.35)",
+                    : "0 4px 20px rgba(99,102,241,0.35)",
                 fontFamily: "'DM Sans', sans-serif",
               }}
             >
@@ -398,7 +383,6 @@ const Register = () => {
             </button>
           </div>
 
-          {/* Social divider */}
           <div className="stagger-7">
             <DividerWithText />
             <SocialLoginButton
@@ -412,7 +396,6 @@ const Register = () => {
         </form>
       </AuthCard>
 
-      {/* ── Login link ── */}
       <div className="stagger-7 mt-4 text-center">
         <p
           className="text-sm text-[#52525b]"
@@ -421,10 +404,10 @@ const Register = () => {
           Already have an account?{" "}
           <button
             onClick={() => navigate(ROUTES.LOGIN)}
-            className="font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded"
-            style={{ color: "#10b981" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#34d399")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#10b981")}
+            className="font-semibold transition-colors focus:outline-none"
+            style={{ color: "#818cf8" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#a5b4fc")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#818cf8")}
           >
             Sign in instead →
           </button>

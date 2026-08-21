@@ -11,7 +11,6 @@ import SocialLoginButton from "../components/auth/SocialLoginButton";
 import DividerWithText from "../components/auth/DividerWithText";
 import { mapAuthError } from "../utils/authErrors";
 
-// ─── Eye icons ────────────────────────────────────────────────────────────────
 const EyeOpen = () => (
   <svg
     width="16"
@@ -44,7 +43,6 @@ const EyeClosed = () => (
   </svg>
 );
 
-// ─── Login Page ───────────────────────────────────────────────────────────────
 const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -66,10 +64,6 @@ const Login = () => {
 
   const rememberMeId = useId();
 
-  // ── Clear the API-level error banner when the user starts editing ──────────
-  // WHY: stale error messages (e.g. "Invalid email or password") should
-  // disappear the moment the user begins correcting their input, not linger
-  // until the next submission.
   const makeChangeHandler = (field) => (e) => {
     if (apiError) setApiError("");
     handleChange(field)(e);
@@ -87,10 +81,7 @@ const Login = () => {
       await login(values.email.trim(), values.password);
       navigate(ROUTES.DASHBOARD);
     } catch (err) {
-      // ── FIX: use centralized mapper so no JWT/refresh internals reach users ─
       const mapped = mapAuthError(err, "login");
-
-      // Surface field-specific errors where we can for better UX
       if (
         mapped.toLowerCase().includes("email") &&
         !mapped.toLowerCase().includes("password")
@@ -108,7 +99,6 @@ const Login = () => {
 
   return (
     <AuthLayout animKey="login" marketingPanel={<LoginMarketingPanel />}>
-      {/* ── Heading ── */}
       <div className="stagger-1 mb-5">
         <h2
           className="text-2xl font-bold text-white mb-1.5"
@@ -128,7 +118,6 @@ const Login = () => {
       </div>
 
       <AuthCard>
-        {/* ── API Error banner — animated, screen-reader friendly ─────────── */}
         {apiError && (
           <div
             role="alert"
@@ -152,7 +141,6 @@ const Login = () => {
         )}
 
         <form onSubmit={handleSubmit} noValidate>
-          {/* Email */}
           <div className="stagger-2">
             <AuthInput
               label="Email address"
@@ -163,13 +151,10 @@ const Login = () => {
               onBlur={handleBlur("email")}
               error={errors.email}
               autoComplete="email"
-              // FIX: disable all inputs while submitting (Issue #5)
               disabled={submitting}
-              aria-describedby={errors.email ? "email-error" : undefined}
             />
           </div>
 
-          {/* Password */}
           <div className="stagger-3 mt-3">
             <AuthInput
               label="Password"
@@ -185,7 +170,7 @@ const Login = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  className="text-[#52525b] hover:text-[#a1a1aa] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded"
+                  className="text-[#52525b] hover:text-[#a1a1aa] transition-colors focus:outline-none"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                   tabIndex={-1}
                 >
@@ -213,13 +198,13 @@ const Login = () => {
                   className="w-4 h-4 rounded border transition-all duration-200 flex items-center justify-center"
                   style={{
                     background: rememberMe
-                      ? "#10b981"
+                      ? "#6366f1"
                       : "rgba(255,255,255,0.04)",
                     borderColor: rememberMe
-                      ? "#10b981"
+                      ? "#6366f1"
                       : "rgba(255,255,255,0.15)",
                     boxShadow: rememberMe
-                      ? "0 0 0 2px rgba(16,185,129,0.2)"
+                      ? "0 0 0 2px rgba(99,102,241,0.2)"
                       : "none",
                   }}
                   onClick={() => setRememberMe((p) => !p)}
@@ -247,10 +232,10 @@ const Login = () => {
 
             <button
               type="button"
-              className="text-[12px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded"
-              style={{ color: "#10b981", fontFamily: "'DM Sans', sans-serif" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#34d399")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#10b981")}
+              className="text-[12px] font-medium transition-colors focus:outline-none"
+              style={{ color: "#818cf8", fontFamily: "'DM Sans', sans-serif" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#a5b4fc")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#818cf8")}
             >
               Forgot password?
             </button>
@@ -262,14 +247,14 @@ const Login = () => {
               type="submit"
               disabled={submitting}
               aria-busy={submitting}
-              className="btn-primary w-full py-3 rounded-xl text-sm font-semibold text-white transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+              className="btn-primary w-full py-3 rounded-xl text-sm font-semibold text-white transition-all duration-200 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
               style={{
                 background: submitting
-                  ? "rgba(16,185,129,0.5)"
-                  : "linear-gradient(135deg, #10b981, #059669)",
+                  ? "rgba(99,102,241,0.5)"
+                  : "linear-gradient(135deg, #6366f1, #4f46e5)",
                 boxShadow: submitting
                   ? "none"
-                  : "0 4px 20px rgba(16,185,129,0.35)",
+                  : "0 4px 20px rgba(99,102,241,0.35)",
                 fontFamily: "'DM Sans', sans-serif",
               }}
             >
@@ -304,7 +289,6 @@ const Login = () => {
             </button>
           </div>
 
-          {/* Social divider */}
           <div className="stagger-6">
             <DividerWithText />
             <SocialLoginButton
@@ -317,7 +301,6 @@ const Login = () => {
         </form>
       </AuthCard>
 
-      {/* ── Register link ── */}
       <div className="stagger-7 mt-4 text-center">
         <p
           className="text-sm text-[#52525b]"
@@ -326,10 +309,10 @@ const Login = () => {
           Don't have an account?{" "}
           <button
             onClick={() => navigate(ROUTES.REGISTER)}
-            className="font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded"
-            style={{ color: "#10b981" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#34d399")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#10b981")}
+            className="font-semibold transition-colors focus:outline-none"
+            style={{ color: "#818cf8" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#a5b4fc")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#818cf8")}
           >
             Create one free →
           </button>

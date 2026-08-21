@@ -12,12 +12,11 @@ const AuthCard = ({ children, className = "" }) => (
       backdropFilter: "blur(12px)",
     }}
   >
-    {/* Top shimmer edge */}
     <div
       className="absolute top-0 left-0 right-0 h-px"
       style={{
         background:
-          "linear-gradient(90deg, transparent 0%, rgba(16,185,129,0.4) 40%, rgba(99,102,241,0.3) 70%, transparent 100%)",
+          "linear-gradient(90deg, transparent 0%, rgba(99,102,241,0.5) 40%, rgba(139,92,246,0.4) 70%, transparent 100%)",
       }}
     />
     <div className="p-8">{children}</div>
