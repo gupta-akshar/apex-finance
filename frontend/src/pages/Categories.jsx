@@ -1,9 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import {
-  getCategories,
-  addCategoryAPI,
-  deleteCategoryAPI,
-} from "../api/categoryApi";
+import { addCategoryAPI, deleteCategoryAPI } from "../api/categoryApi";
 import DeleteConfirm from "../components/DeleteConfirm";
 import useFonts from "../hooks/useFonts";
 import useCategories from "../hooks/useCategories";
@@ -346,7 +342,10 @@ const Categories = () => {
     setApiError("");
     try {
       await deleteCategoryAPI(deleteTarget._id);
-      setCategories((prev) => prev.filter((c) => c._id !== deleteTarget._id));
+      setLocalCategories((prev) =>
+        prev.filter((c) => c._id !== deleteTarget._id),
+      );
+      invalidate();
     } catch (err) {
       console.error("Failed to delete:", err);
       setApiError(
@@ -395,9 +394,7 @@ const Categories = () => {
         />
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          STICKY TOOLBAR
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* ── Sticky Toolbar ── */}
       <div className="sticky top-0 z-10 border-b border-[#27272a] bg-[#0a0a0c]/95 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-6 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
           {/* Left: type filter chips */}
@@ -486,11 +483,9 @@ const Categories = () => {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          MAIN CONTENT
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* ── Main Content ── */}
       <div className="relative z-10 max-w-4xl mx-auto px-6 py-7">
-        {/* ── Page header ── */}
+        {/* Page header */}
         <div className="mb-6">
           <h1
             className="text-2xl font-semibold text-white leading-tight"
@@ -503,7 +498,7 @@ const Categories = () => {
           </p>
         </div>
 
-        {/* ── API Error Banner ── */}
+        {/* API Error Banner */}
         {apiError && (
           <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-[#f87171]/20 bg-[#f87171]/8 mb-5">
             <p
@@ -522,7 +517,7 @@ const Categories = () => {
           </div>
         )}
 
-        {/* ── Inline Add Form ── */}
+        {/* Inline Add Form */}
         {showForm && (
           <AddCategoryForm
             onSave={handleSave}
@@ -531,7 +526,7 @@ const Categories = () => {
           />
         )}
 
-        {/* ── Stats strip ── */}
+        {/* Stats strip */}
         <div className="grid grid-cols-3 gap-3 mb-6">
           {[
             {
@@ -580,7 +575,7 @@ const Categories = () => {
           ))}
         </div>
 
-        {/* ── Empty state ── */}
+        {/* Empty state */}
         {!hasResults && (
           <EmptyState
             filter={filterType}
@@ -592,7 +587,7 @@ const Categories = () => {
           />
         )}
 
-        {/* ── Grouped category list ── */}
+        {/* Grouped category list */}
         {hasResults && (
           <div className="space-y-5">
             {["income", "expense"].map((type) => {
@@ -649,7 +644,7 @@ const Categories = () => {
           </div>
         )}
 
-        {/* ── Tip footer ── */}
+        {/* Tip footer */}
         {hasResults && (
           <p
             className="text-center text-[11px] text-[#3f3f46] mt-8"
@@ -660,7 +655,7 @@ const Categories = () => {
         )}
       </div>
 
-      {/* ── Delete confirm dialog ── */}
+      {/* Delete confirm dialog */}
       {deleteTarget && (
         <DeleteConfirm
           name={deleteTarget.name}
