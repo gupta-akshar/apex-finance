@@ -1,5 +1,4 @@
 import React from "react";
-import logo from "../../../public/logo.svg";
 
 const PARTICLE_DATA = Array.from({ length: 20 }, (_, i) => ({
   id: i,
@@ -132,7 +131,7 @@ const AuthLayout = ({ marketingPanel, children, animKey }) => {
 
         <div className="lg:hidden flex items-center gap-2.5 px-8 pt-6 pb-2 shrink-0">
           <img
-            src={logo}
+            src="/logo.svg"
             alt="ExpenseTracker"
             className="w-10 h-10 rounded-xl shrink-0"
             style={{ boxShadow: "0 4px 20px rgba(99,102,241,0.4)" }}

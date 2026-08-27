@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { NavLink, Link, useNavigate } from "react-router-dom";
 import { ROUTES } from "../constants/routes";
 import { useAuth } from "../hooks/useAuth";
-import logo from "../../public/logo.svg";
 
 const NAV_ITEMS = [
   { to: ROUTES.DASHBOARD, label: "Dashboard", icon: "▦" },
@@ -26,7 +25,7 @@ const AppLogo = ({ collapsed = false, onClick }) => (
     }`}
   >
     <img
-      src={logo}
+      src="/logo.svg"
       alt="ExpenseTracker"
       className="w-8 h-8 shrink-0 transition-transform duration-300 group-hover:scale-105"
     />

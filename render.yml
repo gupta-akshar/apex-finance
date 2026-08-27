@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: expensetracker-backend
+    runtime: node
+    region: singapore # choose closest to your users; options: oregon, frankfurt, singapore, ohio
+    plan: free # upgrade to starter ($7/mo) for always-on + more RAM
+    rootDir: backend
+    buildCommand: npm ci --omit=dev
+    startCommand: node src/server.js
+    healthCheckPath: /api/health
+    autoDeploy: true # redeploys on every push to the connected branch
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000" # Render assigns port 10000 by default for web services
+      - key: MONGO_URI
+        sync: false # mark as secret — set in Render dashboard
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: CLIENT_URL
+        sync: false # set to your Vercel production URL, e.g. https://expensetracker.vercel.app
+      - key: BCRYPT_ROUNDS
+        value: "12"
+      - key: RATE_LIMIT_LOGIN_MAX
+        value: "5"
+      - key: RATE_LIMIT_REGISTER_MAX
+        value: "10"
+      - key: HEALTH_SECRET
+        sync: false # optional — enables /api/health/details
+      - key: LOG_LEVEL
+        value: info

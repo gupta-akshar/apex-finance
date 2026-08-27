@@ -1,5 +1,4 @@
 import React from "react";
-import logo from "../../../public/logo.svg";
 
 const FEATURES = [
   {
@@ -52,7 +51,7 @@ const LoginMarketingPanel = () => {
       {/* Logo + Brand */}
       <div className="left-stagger-1 flex items-center gap-3 mb-12">
         <img
-          src={logo}
+          src="/logo.svg"
           alt="ExpenseTracker"
           className="w-10 h-10 rounded-xl shrink-0"
           style={{ boxShadow: "0 4px 20px rgba(99,102,241,0.4)" }}
