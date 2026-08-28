@@ -1,11 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  render,
-  screen,
-  waitFor,
-  within,
-  fireEvent,
-} from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TransactionModal from "../TransactionModal";
 
@@ -65,8 +59,30 @@ const setup = (props = {}) => {
   return { user, ...utils, onClose: defaultProps.onClose };
 };
 
+/** The first date input in the modal */
 const getDateInput = (container) =>
   container.querySelector('input[type="date"]');
+
+/**
+ * Returns the category <select> — identified as the first combobox whose
+ * options include one of the mock category IDs.
+ */
+const getCategorySelect = (container) => {
+  const selects = Array.from(container.querySelectorAll("select"));
+  return selects.find((s) =>
+    Array.from(s.options).some((o) =>
+      ["cat-food-01", "cat-sal-01"].includes(o.value),
+    ),
+  );
+};
+
+/** Returns the payment-method <select> */
+const getPaymentSelect = (container) => {
+  const selects = Array.from(container.querySelectorAll("select"));
+  return selects.find((s) =>
+    Array.from(s.options).some((o) => o.value === "upi"),
+  );
+};
 
 // ─── 1. Render ────────────────────────────────────────────────────────────────
 
@@ -92,39 +108,35 @@ describe("TransactionModal – render", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders all form fields", () => {
+  it("renders amount input, category select, date input, note input, payment method select", () => {
     const { container } = setup();
     expect(screen.getByPlaceholderText(/amount/i)).toBeInTheDocument();
-    expect(screen.getAllByRole("combobox").length).toBeGreaterThan(0);
-    expect(getDateInput(container)).toBeInTheDocument();
+    expect(getCategorySelect(container)).toBeTruthy();
+    expect(getDateInput(container)).toBeTruthy();
     expect(screen.getByPlaceholderText(/note/i)).toBeInTheDocument();
-    expect(screen.getByDisplayValue(/upi/i)).toBeInTheDocument();
+    expect(getPaymentSelect(container)).toBeTruthy();
   });
 
   it("shows only expense categories in expense mode", () => {
-    setup({ mode: "expense" });
-    const categorySelect = screen.getAllByRole("combobox")[0];
-    const names = within(categorySelect)
-      .getAllByRole("option")
-      .map((o) => o.textContent);
-    expect(names).toContain("Food");
-    expect(names).not.toContain("Salary");
+    const { container } = setup({ mode: "expense" });
+    const catSelect = getCategorySelect(container);
+    const optionValues = Array.from(catSelect.options)
+      .map((o) => o.value)
+      .filter(Boolean);
+    expect(optionValues).toContain("cat-food-01");
+    expect(optionValues).toContain("cat-trans-01");
+    expect(optionValues).not.toContain("cat-sal-01");
   });
 
   it("shows only income categories in income mode", () => {
-    setup({ mode: "income" });
-    const allSelects = screen.getAllByRole("combobox");
-    const categorySelect = allSelects.find((s) =>
-      within(s)
-        .queryAllByRole("option")
-        .some((o) => o.value === "cat-sal-01"),
-    );
-    expect(categorySelect).toBeDefined();
-    const names = within(categorySelect)
-      .getAllByRole("option")
-      .map((o) => o.textContent);
-    expect(names).toContain("Salary");
-    expect(names).not.toContain("Food");
+    const { container } = setup({ mode: "income" });
+    const catSelect = getCategorySelect(container);
+    const optionValues = Array.from(catSelect.options)
+      .map((o) => o.value)
+      .filter(Boolean);
+    expect(optionValues).toContain("cat-sal-01");
+    expect(optionValues).toContain("cat-free-01");
+    expect(optionValues).not.toContain("cat-food-01");
   });
 
   it("calls onClose when × button is clicked", async () => {
@@ -138,6 +150,16 @@ describe("TransactionModal – render", () => {
     await user.click(screen.getByRole("button", { name: /cancel/i }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("shows 'Save' submit button in add mode", () => {
+    setup({ mode: "expense" });
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeInTheDocument();
+  });
+
+  it("shows 'Update' submit button in edit mode", () => {
+    setup({ mode: "expense", transaction: MOCK_EXPENSE_TX });
+    expect(screen.getByRole("button", { name: /update/i })).toBeInTheDocument();
+  });
 });
 
 // ─── 2. Validation ────────────────────────────────────────────────────────────
@@ -149,7 +171,7 @@ describe("TransactionModal – validation", () => {
 
   it("shows error when amount is missing", async () => {
     const { user } = setup();
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/valid amount/i)).toBeInTheDocument();
     expect(mockAddTransaction).not.toHaveBeenCalled();
   });
@@ -159,7 +181,7 @@ describe("TransactionModal – validation", () => {
     fireEvent.input(screen.getByPlaceholderText(/amount/i), {
       target: { value: "0" },
     });
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/valid amount/i)).toBeInTheDocument();
     expect(mockAddTransaction).not.toHaveBeenCalled();
   });
@@ -169,7 +191,7 @@ describe("TransactionModal – validation", () => {
     fireEvent.input(screen.getByPlaceholderText(/amount/i), {
       target: { value: "-50" },
     });
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/valid amount/i)).toBeInTheDocument();
     expect(mockAddTransaction).not.toHaveBeenCalled();
   });
@@ -179,17 +201,17 @@ describe("TransactionModal – validation", () => {
     fireEvent.input(screen.getByPlaceholderText(/amount/i), {
       target: { value: "1e309" },
     });
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/valid amount/i)).toBeInTheDocument();
     expect(mockAddTransaction).not.toHaveBeenCalled();
   });
 
-  it("shows error when amount exceeds maximum", async () => {
+  it("shows error when amount exceeds maximum (1,000,000,000)", async () => {
     const { user } = setup();
     fireEvent.input(screen.getByPlaceholderText(/amount/i), {
       target: { value: "2000000000" },
     });
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/cannot exceed/i)).toBeInTheDocument();
     expect(mockAddTransaction).not.toHaveBeenCalled();
   });
@@ -197,17 +219,18 @@ describe("TransactionModal – validation", () => {
   it("shows error when category is not selected", async () => {
     const { user } = setup();
     await user.type(screen.getByPlaceholderText(/amount/i), "500");
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/select a category/i)).toBeInTheDocument();
     expect(mockAddTransaction).not.toHaveBeenCalled();
   });
 
   it("shows error when date is missing", async () => {
-    const { user } = setup();
+    const { user, container } = setup();
     await user.type(screen.getByPlaceholderText(/amount/i), "500");
-    const categorySelect = screen.getAllByRole("combobox")[0];
-    await user.selectOptions(categorySelect, "cat-food-01");
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    fireEvent.change(getCategorySelect(container), {
+      target: { value: "cat-food-01" },
+    });
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/select a date/i)).toBeInTheDocument();
     expect(mockAddTransaction).not.toHaveBeenCalled();
   });
@@ -231,23 +254,18 @@ describe("TransactionModal – add mode submission", () => {
     const { user, container } = setup({ mode: "expense", onClose });
 
     await user.type(screen.getByPlaceholderText(/amount/i), "750");
-    const allSelects = screen.getAllByRole("combobox");
-    const categorySelect = allSelects.find((s) =>
-      within(s)
-        .queryAllByRole("option")
-        .some((o) => o.value === "cat-food-01"),
-    );
-    await user.selectOptions(categorySelect, "cat-food-01");
-    await user.type(getDateInput(container), "2025-04-20");
+    fireEvent.change(getCategorySelect(container), {
+      target: { value: "cat-food-01" },
+    });
+    fireEvent.change(getDateInput(container), {
+      target: { value: "2025-04-20" },
+    });
     await user.type(screen.getByPlaceholderText(/note/i), "Lunch");
+    fireEvent.change(getPaymentSelect(container), {
+      target: { value: "cash" },
+    });
 
-    const paymentSelect = allSelects.find((s) =>
-      within(s)
-        .queryAllByRole("option")
-        .some((o) => o.value === "cash"),
-    );
-    await user.selectOptions(paymentSelect, "cash");
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() => {
       expect(mockAddTransaction).toHaveBeenCalledTimes(1);
@@ -263,7 +281,7 @@ describe("TransactionModal – add mode submission", () => {
     });
   });
 
-  it("closes the modal after successful submission with no budget warning", async () => {
+  it("closes modal after successful submission with no budget warning", async () => {
     mockAddTransaction.mockResolvedValue({
       transaction: { _id: "new-tx" },
       budgetWarning: false,
@@ -274,15 +292,18 @@ describe("TransactionModal – add mode submission", () => {
     const { user, container } = setup({ mode: "expense", onClose });
 
     await user.type(screen.getByPlaceholderText(/amount/i), "300");
-    const categorySelect = screen.getAllByRole("combobox")[0];
-    await user.selectOptions(categorySelect, "cat-food-01");
-    await user.type(getDateInput(container), "2025-04-10");
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    fireEvent.change(getCategorySelect(container), {
+      target: { value: "cat-food-01" },
+    });
+    fireEvent.change(getDateInput(container), {
+      target: { value: "2025-04-10" },
+    });
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
-  it("shows server error message on rejection", async () => {
+  it("shows server error message on API rejection", async () => {
     mockAddTransaction.mockRejectedValue({
       response: { data: { message: "Server error: category not found" } },
     });
@@ -290,24 +311,32 @@ describe("TransactionModal – add mode submission", () => {
     const { user, container } = setup({ mode: "expense", onClose: vi.fn() });
 
     await user.type(screen.getByPlaceholderText(/amount/i), "200");
-    await user.selectOptions(screen.getAllByRole("combobox")[0], "cat-food-01");
-    await user.type(getDateInput(container), "2025-04-10");
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    fireEvent.change(getCategorySelect(container), {
+      target: { value: "cat-food-01" },
+    });
+    fireEvent.change(getDateInput(container), {
+      target: { value: "2025-04-10" },
+    });
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     expect(
       await screen.findByText(/server error: category not found/i),
     ).toBeInTheDocument();
   });
 
-  it("shows fallback error message when rejection has no message", async () => {
+  it("shows fallback error message when API rejection has no response body", async () => {
     mockAddTransaction.mockRejectedValue(new Error("Network failure"));
 
     const { user, container } = setup({ mode: "expense", onClose: vi.fn() });
 
     await user.type(screen.getByPlaceholderText(/amount/i), "100");
-    await user.selectOptions(screen.getAllByRole("combobox")[0], "cat-food-01");
-    await user.type(getDateInput(container), "2025-04-10");
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    fireEvent.change(getCategorySelect(container), {
+      target: { value: "cat-food-01" },
+    });
+    fireEvent.change(getDateInput(container), {
+      target: { value: "2025-04-10" },
+    });
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     expect(
       await screen.findByText(/failed to add transaction/i),
@@ -334,11 +363,14 @@ describe("TransactionModal – edit mode", () => {
   });
 
   it("pre-populates payment method", () => {
-    setup({ mode: "expense", transaction: MOCK_EXPENSE_TX });
-    expect(screen.getByDisplayValue(/cash/i)).toBeInTheDocument();
+    const { container } = setup({
+      mode: "expense",
+      transaction: MOCK_EXPENSE_TX,
+    });
+    expect(getPaymentSelect(container).value).toBe("cash");
   });
 
-  it("pre-populates date", () => {
+  it("pre-populates date (YYYY-MM-DD format)", () => {
     const { container } = setup({
       mode: "expense",
       transaction: MOCK_EXPENSE_TX,
@@ -347,14 +379,11 @@ describe("TransactionModal – edit mode", () => {
   });
 
   it("pre-selects correct category", () => {
-    setup({ mode: "expense", transaction: MOCK_EXPENSE_TX });
-    const allSelects = screen.getAllByRole("combobox");
-    const categorySelect = allSelects.find((s) =>
-      within(s)
-        .queryAllByRole("option")
-        .some((o) => o.value === "cat-food-01"),
-    );
-    expect(categorySelect.value).toBe("cat-food-01");
+    const { container } = setup({
+      mode: "expense",
+      transaction: MOCK_EXPENSE_TX,
+    });
+    expect(getCategorySelect(container).value).toBe("cat-food-01");
   });
 
   it("calls editTransaction (not addTransaction) on submit", async () => {
@@ -394,17 +423,7 @@ describe("TransactionModal – edit mode", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
-  it("shows 'Update' button in edit mode", () => {
-    setup({ mode: "expense", transaction: MOCK_EXPENSE_TX });
-    expect(screen.getByRole("button", { name: /update/i })).toBeInTheDocument();
-  });
-
-  it("shows 'Save' button in add mode", () => {
-    setup({ mode: "expense" });
-    expect(screen.getByRole("button", { name: /save/i })).toBeInTheDocument();
-  });
-
-  it("preserves all existing fields when only note changes", async () => {
+  it("preserves all existing fields when only note is changed", async () => {
     mockEditTransaction.mockResolvedValue({ _id: "tx-001" });
     const onClose = vi.fn();
     const { user } = setup({
@@ -431,6 +450,24 @@ describe("TransactionModal – edit mode", () => {
       );
     });
   });
+
+  it("shows 'Update' button label in edit mode", () => {
+    setup({ mode: "expense", transaction: MOCK_EXPENSE_TX });
+    expect(screen.getByRole("button", { name: /update/i })).toBeInTheDocument();
+  });
+
+  it("shows fallback error when edit fails", async () => {
+    mockEditTransaction.mockRejectedValue(new Error("edit failed"));
+    const { user } = setup({
+      mode: "expense",
+      transaction: MOCK_EXPENSE_TX,
+      onClose: vi.fn(),
+    });
+    await user.click(screen.getByRole("button", { name: /update/i }));
+    expect(
+      await screen.findByText(/failed to update transaction/i),
+    ).toBeInTheDocument();
+  });
 });
 
 // ─── 5. Budget warning ────────────────────────────────────────────────────────
@@ -440,11 +477,15 @@ describe("TransactionModal – budget warning", () => {
     mockAddTransaction.mockReset();
   });
 
-  const submitValidForm = async (user, container) => {
+  const fillAndSubmit = async (user, container) => {
     await user.type(screen.getByPlaceholderText(/amount/i), "5000");
-    await user.selectOptions(screen.getAllByRole("combobox")[0], "cat-food-01");
-    await user.type(getDateInput(container), "2025-04-10");
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    fireEvent.change(getCategorySelect(container), {
+      target: { value: "cat-food-01" },
+    });
+    fireEvent.change(getDateInput(container), {
+      target: { value: "2025-04-10" },
+    });
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
   };
 
   it("shows budget warning banner when budgetWarning is true", async () => {
@@ -455,14 +496,14 @@ describe("TransactionModal – budget warning", () => {
     });
 
     const { user, container } = setup({ mode: "expense", onClose: vi.fn() });
-    await submitValidForm(user, container);
+    await fillAndSubmit(user, container);
 
     expect(
       await screen.findByText(/exceeded your budget by ₹500\.00/i),
     ).toBeInTheDocument();
   });
 
-  it("does NOT close modal automatically on budget warning", async () => {
+  it("does NOT close modal automatically when budgetWarning is true", async () => {
     mockAddTransaction.mockResolvedValue({
       transaction: { _id: "new-tx" },
       budgetWarning: true,
@@ -471,13 +512,13 @@ describe("TransactionModal – budget warning", () => {
 
     const onClose = vi.fn();
     const { user, container } = setup({ mode: "expense", onClose });
-    await submitValidForm(user, container);
+    await fillAndSubmit(user, container);
 
     await screen.findByText(/exceeded your budget by ₹100\.00/i);
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("closes modal when user acknowledges warning via OK", async () => {
+  it("closes modal when user acknowledges warning via OK button", async () => {
     mockAddTransaction.mockResolvedValue({
       transaction: { _id: "new-tx" },
       budgetWarning: true,
@@ -486,9 +527,9 @@ describe("TransactionModal – budget warning", () => {
 
     const onClose = vi.fn();
     const { user, container } = setup({ mode: "expense", onClose });
-    await submitValidForm(user, container);
+    await fillAndSubmit(user, container);
 
-    const okButton = await screen.findByRole("button", { name: /ok/i });
+    const okButton = await screen.findByRole("button", { name: /^ok$/i });
     await user.click(okButton);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -502,11 +543,11 @@ describe("TransactionModal – budget warning", () => {
 
     const onClose = vi.fn();
     const { user, container } = setup({ mode: "expense", onClose });
-    await submitValidForm(user, container);
+    await fillAndSubmit(user, container);
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(
-      screen.queryByRole("button", { name: /ok/i }),
+      screen.queryByRole("button", { name: /^ok$/i }),
     ).not.toBeInTheDocument();
   });
 });
@@ -519,25 +560,31 @@ describe("TransactionModal – loading state", () => {
     mockEditTransaction.mockReset();
   });
 
-  const fillValidForm = async (user, container, amount = "400") => {
-    await user.type(screen.getByPlaceholderText(/amount/i), amount);
-    await user.selectOptions(screen.getAllByRole("combobox")[0], "cat-food-01");
-    await user.type(getDateInput(container), "2025-04-10");
+  const fillValidForm = async (container) => {
+    fireEvent.input(screen.getByPlaceholderText(/amount/i), {
+      target: { value: "400" },
+    });
+    fireEvent.change(getCategorySelect(container), {
+      target: { value: "cat-food-01" },
+    });
+    fireEvent.change(getDateInput(container), {
+      target: { value: "2025-04-10" },
+    });
   };
 
-  it("shows 'Saving…' while request is in flight", async () => {
+  it("shows 'Saving...' while request is in flight", async () => {
     mockAddTransaction.mockReturnValue(new Promise(() => {}));
     const { user, container } = setup({ mode: "expense", onClose: vi.fn() });
-    await fillValidForm(user, container);
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    await fillValidForm(container);
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/saving\.\.\./i)).toBeInTheDocument();
   });
 
   it("disables Save button while submitting", async () => {
     mockAddTransaction.mockReturnValue(new Promise(() => {}));
     const { user, container } = setup({ mode: "expense", onClose: vi.fn() });
-    await fillValidForm(user, container);
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    await fillValidForm(container);
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
     const savingBtn = await screen.findByText(/saving\.\.\./i);
     expect(savingBtn.closest("button")).toBeDisabled();
   });
@@ -545,8 +592,8 @@ describe("TransactionModal – loading state", () => {
   it("disables Cancel button while submitting", async () => {
     mockAddTransaction.mockReturnValue(new Promise(() => {}));
     const { user, container } = setup({ mode: "expense", onClose: vi.fn() });
-    await fillValidForm(user, container);
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    await fillValidForm(container);
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
     await screen.findByText(/saving\.\.\./i);
     expect(screen.getByRole("button", { name: /cancel/i })).toBeDisabled();
   });
@@ -558,8 +605,8 @@ describe("TransactionModal – loading state", () => {
       warningMessage: "",
     });
     const { user, container } = setup({ mode: "expense", onClose: vi.fn() });
-    await fillValidForm(user, container, "100");
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    await fillValidForm(container);
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
     await waitFor(() =>
       expect(screen.queryByText(/saving\.\.\./i)).not.toBeInTheDocument(),
     );

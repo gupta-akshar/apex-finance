@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   fetchOverview,
   fetchMonthlyTrend,
@@ -45,9 +45,6 @@ const toPieData = (categories = []) =>
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 const useDashboardAnalytics = () => {
-  // FIX: compute currentYear inside state initialiser so it's always fresh
-  // on mount. If the user keeps the page open past midnight Dec 31, a manual
-  // refresh (or the invalidate call) will pick up the new year.
   const [currentYear, setCurrentYear] = useState(() =>
     new Date().getFullYear(),
   );
@@ -103,7 +100,7 @@ const useDashboardAnalytics = () => {
 
   useEffect(() => {
     const controller = new AbortController();
-    load(controller.signal);
+    queueMicrotask(() => load(controller.signal));
     return () => controller.abort();
   }, [load]);
 

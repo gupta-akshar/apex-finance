@@ -10,7 +10,7 @@ import RegisterMarketingPanel from "../components/auth/RegisterMarketingPanel";
 import PasswordStrengthMeter from "../components/auth/PasswordStrengthMeter";
 import SocialLoginButton from "../components/auth/SocialLoginButton";
 import DividerWithText from "../components/auth/DividerWithText";
-import { mapAuthError } from "../utils/authErrors";
+import { mapAuthError } from "../utils/AuthErrors";
 
 const EyeOpen = () => (
   <svg

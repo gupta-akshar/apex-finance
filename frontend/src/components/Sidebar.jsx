@@ -191,16 +191,12 @@ const UserFooter = ({ user, onLogout, collapsed }) => (
 // ── Main Sidebar ─────────────────────────────────────────────────────────────
 
 const Sidebar = ({ onCollapsedChange }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem("sidebar-collapsed") === "true",
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-
-  // Persist collapsed state
-  useEffect(() => {
-    const saved = localStorage.getItem("sidebar-collapsed");
-    if (saved === "true") setCollapsed(true);
-  }, []);
 
   const toggleCollapse = useCallback(() => {
     setCollapsed((prev) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { addCategoryAPI, deleteCategoryAPI } from "../api/categoryApi";
 import DeleteConfirm from "../components/DeleteConfirm";
 import useFonts from "../hooks/useFonts";
@@ -272,23 +272,18 @@ const CategoryRow = ({ cat, onDelete, idx }) => {
 /* ═══════════════════════════════════════════════════════════════════════════ */
 const Categories = () => {
   useFonts();
-  const { categories: contextCategories, invalidate } = useCategories();
+  const {
+    categories: localCategories,
+    loading: pageLoading,
+    invalidate,
+  } = useCategories();
 
-  const [pageLoading, setPageLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [filterType, setFilterType] = useState("");
   const [search, setSearch] = useState("");
   const [apiError, setApiError] = useState("");
-
-  // Local state mirrors context so we can do optimistic updates
-  const [localCategories, setLocalCategories] = useState([]);
-
-  useEffect(() => {
-    setLocalCategories(contextCategories);
-    if (contextCategories.length >= 0) setPageLoading(false);
-  }, [contextCategories]);
 
   const filtered = useMemo(() => {
     let list = localCategories;
@@ -321,9 +316,8 @@ const Categories = () => {
     setSaving(true);
     setApiError("");
     try {
-      const added = await addCategoryAPI({ name, type });
-      setLocalCategories((prev) => [...prev, added]);
-      invalidate();
+      await addCategoryAPI({ name, type });
+      await invalidate();
       setShowForm(false);
     } catch (err) {
       setApiError(
@@ -342,10 +336,7 @@ const Categories = () => {
     setApiError("");
     try {
       await deleteCategoryAPI(deleteTarget._id);
-      setLocalCategories((prev) =>
-        prev.filter((c) => c._id !== deleteTarget._id),
-      );
-      invalidate();
+      await invalidate();
     } catch (err) {
       console.error("Failed to delete:", err);
       setApiError(

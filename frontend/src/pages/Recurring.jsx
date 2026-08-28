@@ -708,7 +708,7 @@ const RecurringTransactions = () => {
             : i,
         ),
       );
-    } catch (err) {
+    } catch {
       // Revert on failure
       setItems((prev) =>
         prev.map((i) =>

@@ -83,10 +83,20 @@ describe("POST /api/auth/register", () => {
       "+refreshTokenHash",
     );
     expect(user.refreshTokenHash).toBe(hashToken(rawToken));
-    // The stored value must NOT equal the raw token
+    // Stored value must NOT equal the raw token
     expect(user.refreshTokenHash).not.toBe(rawToken);
-    // The old plaintext field must not exist
+    // Old plaintext field must not exist on the model
     expect(user.refreshToken).toBeUndefined();
+  });
+
+  it("seeds 7 default categories on registration", async () => {
+    // Verify seeding indirectly via the categories endpoint
+    const res = await register();
+    const catRes = await request(app)
+      .get("/api/categories")
+      .set("Authorization", `Bearer ${res.body.accessToken}`);
+    expect(catRes.status).toBe(200);
+    expect(catRes.body.length).toBe(7);
   });
 
   it("returns 400 for duplicate email", async () => {
@@ -107,6 +117,12 @@ describe("POST /api/auth/register", () => {
   it("returns 400 when email format is invalid", async () => {
     expect((await register({ email: "not-an-email" })).status).toBe(400);
   });
+
+  it("does not expose password hash in response", async () => {
+    const res = await register();
+    expect(res.body.user.password).toBeUndefined();
+    expect(res.body.user.refreshTokenHash).toBeUndefined();
+  });
 });
 
 // ─── POST /api/auth/login ──────────────────────────────────────────────────────
@@ -124,6 +140,13 @@ describe("POST /api/auth/login", () => {
     expect(getRefreshCookie(res)).not.toBeNull();
   });
 
+  it("returns the authenticated user shape without sensitive fields", async () => {
+    const res = await login();
+    expect(res.body.user).toMatchObject({ email: BASE_USER.email });
+    expect(res.body.user.password).toBeUndefined();
+    expect(res.body.user.refreshTokenHash).toBeUndefined();
+  });
+
   it("returns 401 on wrong password", async () => {
     expect((await login({ password: "wrongpassword" })).status).toBe(401);
   });
@@ -136,6 +159,13 @@ describe("POST /api/auth/login", () => {
     const res = await request(app)
       .post("/api/auth/login")
       .send({ email: BASE_USER.email });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when email is missing", async () => {
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ password: BASE_USER.password });
     expect(res.status).toBe(400);
   });
 });
@@ -191,6 +221,24 @@ describe("POST /api/auth/refresh", () => {
     expect(replayRes.status).toBe(403);
     expect(replayRes.body.message).toMatch(/invalid refresh token/i);
   });
+
+  it("issues a new refresh cookie that is itself valid", async () => {
+    await register();
+    const loginRes = await login();
+    const firstCookie = getRefreshCookie(loginRes);
+
+    const refreshRes1 = await request(app)
+      .post("/api/auth/refresh")
+      .set("Cookie", cookieHeader(firstCookie));
+    expect(refreshRes1.status).toBe(200);
+
+    const secondCookie = getRefreshCookie(refreshRes1);
+    const refreshRes2 = await request(app)
+      .post("/api/auth/refresh")
+      .set("Cookie", cookieHeader(secondCookie));
+    expect(refreshRes2.status).toBe(200);
+    expect(refreshRes2.body.accessToken).toMatch(JWT_PATTERN);
+  });
 });
 
 // ─── POST /api/auth/logout ─────────────────────────────────────────────────────
@@ -228,6 +276,19 @@ describe("POST /api/auth/logout", () => {
   it("returns 200 gracefully with no refresh cookie", async () => {
     expect((await request(app).post("/api/auth/logout")).status).toBe(200);
   });
+
+  it("nullifies the refreshTokenHash in the database on logout", async () => {
+    await register();
+    const loginRes = await login();
+    const cookie = getRefreshCookie(loginRes);
+    await request(app)
+      .post("/api/auth/logout")
+      .set("Cookie", cookieHeader(cookie));
+    const user = await User.findOne({ email: BASE_USER.email }).select(
+      "+refreshTokenHash",
+    );
+    expect(user.refreshTokenHash).toBeNull();
+  });
 });
 
 // ─── GET /api/auth/me ──────────────────────────────────────────────────────────
@@ -255,6 +316,16 @@ describe("GET /api/auth/me", () => {
     const res = await request(app)
       .get("/api/auth/me")
       .set("Authorization", "Bearer not.a.real.token");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 for expired/tampered token", async () => {
+    const res = await request(app)
+      .get("/api/auth/me")
+      .set(
+        "Authorization",
+        "Bearer eyJhbGciOiJIUzI1NiJ9.eyJpZCI6ImZha2UifQ.invalidsig",
+      );
     expect(res.status).toBe(401);
   });
 });

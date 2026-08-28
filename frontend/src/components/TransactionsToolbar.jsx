@@ -30,11 +30,6 @@ const TransactionsToolbar = ({ showAdvanced, onToggleAdvanced }) => {
     return () => clearTimeout(t);
   }, [searchInput, setFilters]);
 
-  // Keep local input in sync if filters are reset externally (e.g. "Clear" button).
-  useEffect(() => {
-    setSearchInput(filters.search || "");
-  }, [filters.search]);
-
   const advancedCount = countAdvancedActive(filters);
   const hasAnyFilter =
     advancedCount > 0 ||

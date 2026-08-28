@@ -45,9 +45,12 @@ export const CategoryProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    const cleanup = fetchCategories();
+    let cleanup;
+    queueMicrotask(async () => {
+      cleanup = await fetchCategories();
+    });
     return () => {
-      cleanup?.then?.((fn) => fn?.());
+      cleanup?.();
     };
   }, [fetchCategories]);
 

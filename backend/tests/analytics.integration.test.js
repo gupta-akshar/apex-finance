@@ -62,6 +62,11 @@ beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
   await mongoose.connect(mongoServer.getUri());
 
+  // Ensure all indexes are created so .hint() calls in the service don't fail
+  await Transaction.createIndexes();
+  await Category.createIndexes();
+  await User.createIndexes();
+
   const user = await User.create({
     name: "Analytics Tester",
     email: "analytics@test.example.com",
@@ -158,7 +163,8 @@ describe("GET /api/analytics/monthly", () => {
   describe("January 2024", () => {
     let body;
     beforeAll(async () => {
-      body = (await get("/api/analytics/monthly?month=1&year=2024")).body;
+      const res = await get("/api/analytics/monthly?month=1&year=2024");
+      body = res.body;
     });
 
     it("returns 200", async () => {

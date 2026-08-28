@@ -58,14 +58,15 @@ const useRecentTransactions = (limit = 5) => {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setLoading(true);
-
-    doFetch(controller.signal).then((result) => {
-      if (result === null) return; // aborted
-      if (!controller.signal.aborted) {
-        setTransactions(result);
-        setLoading(false);
-      }
+    queueMicrotask(() => {
+      setLoading(true);
+      doFetch(controller.signal).then((result) => {
+        if (result === null) return;
+        if (!controller.signal.aborted) {
+          setTransactions(result);
+          setLoading(false);
+        }
+      });
     });
 
     return () => controller.abort();

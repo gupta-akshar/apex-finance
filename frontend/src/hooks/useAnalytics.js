@@ -129,7 +129,7 @@ const useAnalytics = (year, monthIdx) => {
 
   useEffect(() => {
     const controller = new AbortController();
-    load(controller.signal);
+    queueMicrotask(() => load(controller.signal));
     return () => controller.abort();
   }, [load]);
 

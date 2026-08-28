@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { TransactionContext } from "./TransactionContext";
 import {
   getTransactions,
@@ -72,7 +72,7 @@ export const TransactionProvider = ({ children }) => {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchTransactions(controller.signal);
+    queueMicrotask(() => fetchTransactions(controller.signal));
     return () => {
       controller.abort();
     };

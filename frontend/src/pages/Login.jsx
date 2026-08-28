@@ -9,7 +9,7 @@ import AuthInput from "../components/auth/AuthInput";
 import LoginMarketingPanel from "../components/auth/LoginMarketingPanel";
 import SocialLoginButton from "../components/auth/SocialLoginButton";
 import DividerWithText from "../components/auth/DividerWithText";
-import { mapAuthError } from "../utils/authErrors";
+import { mapAuthError } from "../utils/AuthErrors";
 
 const EyeOpen = () => (
   <svg
